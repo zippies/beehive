@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+
+{% block title %}
+    missions
+{% endblock %}
+
+{% block csssrc %}
+    {{ super() }}
+    <link rel="stylesheet" type="text/css" href="/static/css/bootstrap-progressbar-3.2.0.min.css">
+    <style>
+        .panelstyle{
+            font-size:12px;
+            color:#CD3700;
+        }
+    </style>
+
+{% endblock %}
+
+
+{% block container %}
+
+    <form action="/newmission" id="newmissionform" method="post" enctype="multipart/form-data">
+        <div>
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <span class="panelstyle">Step 01: Mission Name</span>
+                </div>
+            </div>
+            <div class="lineitem">
+                <input class="form-control" id="missionName" type="text" name="missionName" value="Mission_{{ timenow }}">
+            </div>
+        </div>
+        <div>
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <span class="panelstyle">Step 02: Base Test Config</span>
+                </div>
+            </div>
+            <div class="lineitem">
+                <UL class="list-inline">
+                    <li>Request Type:</li>
+                    <li>
+                        <select name="type" class="form-control">
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="DELETE">DELETE</option>
+                        </select>
+                    </li>
+                    <li>
+                        <input id="url" name="url" class="form-control" style="width:800px" maxlength="120" type="text" placeholder="请求地址" value="http://121.43.101.211:8180/suime-user/student/login">
+                    </li>
+                </UL>
+                <label>Request Settings</label>
+                <ul class="nav nav-tabs">
+                    <li role="presentation" class="active"><a href="#requestbodypanel" aria-controls="requestbodypanel" role="tab" data-toggle="tab">body</a></li>
+                    <li role="presentation"><a href="#requestheaderpanel" aria-controls="requestheaderpanel" role="tab" data-toggle="tab">header</a></li>
+                    <li role="presentation"><a href="#requestauthpanel" aria-controls="requestauthpanel" role="tab" data-toggle="tab">authorization</a></li>
+                </ul>
+                <div class="tab-content">
+                    <!-- body begin -->
+                    <div role="tabpanel" class="tab-pane active" id="requestbodypanel">
+                        <div class="panel-body" id="req-body-panel">
+                            <ul class="list-inline">
+                                <li>
+                                    <label class="checkbox-inline">
+                                      <input type="checkbox" name="checkbox-data" value="1">data
+                                    </label>
+                                    <label class="checkbox-inline">
+                                      <input type="checkbox" name="checkbox-file" value="1">file
+                                    </label>
+                                </li>
+                                <li><input type="file" name="file"></li>
+                            </ul>
+                            <textarea id="bodyarea" name="requestbody" class="form-control" style="height:100px"></textarea>
+                        </div>
+                    </div>
+                    <!-- body end -->
+                    <!-- header begin -->
+                    <div role="tabpanel" class="tab-pane" id="requestheaderpanel">
+                        <div class="panel-body" id="req-header-panel">
+                            <textarea id="headerarea" name="requestheader" class="form-control"></textarea>
+                        </div>
+                    </div>
+                    <!-- header ennd -->
+                    <!-- auth begin -->
+                    <div role="tabpanel" class="tab-pane" id="requestauthpanel">
+                        <div class="panel-body" id="req-auth-panel">
+                            no auth
+                        </div>
+                    </div>
+                    <!-- auth end -->
+                </div>
+                <label>Assertions</label>
+                <ul class="nav nav-tabs">
+                    <li role="presentation" class="active"><a href="#assertbodypanel" aria-controls="assertbodypanel" role="tab" data-toggle="tab">body</a></li>
+                    <li role="presentation"><a href="#asserttimepanel" aria-controls="asserttimepanel" role="tab" data-toggle="tab">time</a></li>
+                    <li role="presentation"><a href="#assertheaderpanel" aria-controls="assertheaderpanel" role="tab" data-toggle="tab">header</a></li>
+                </ul>
+                <div class="tab-content">
+                    <!-- assert body begin -->
+                    <div role="tabpanel" class="tab-pane active" id="assertbodypanel">
+                        <div class="panel-body" id="assert-body-panel">
+                            <div class="lineitem">
+                                equals:<input type="text" name="equalValue-body" style="width:90%">
+                            </div>
+                            <div class="lineitem">
+                                contains:
+                                <label class="checkbox-inline">
+                                  <input type="checkbox" name="useRegx-body" value="1"> 正则匹配
+                                </label>
+                                <input type="text" name="containValue-body" style="width:85%">
+                            </div>
+                            <div class="lineitem">
+                                length:
+                                <label class="radio-inline">
+                                  <input type="radio" name="lengthRadioOptions-body" value="0"> 小于
+                                </label>
+                                <label class="radio-inline">
+                                  <input type="radio" name="lengthRadioOptions-body" value="1"> 等于
+                                </label>
+                                <label class="radio-inline">
+                                  <input type="radio" name="lengthRadioOptions-body" value="2"> 大于
+                                </label>
+                                <input type="text" name="lengthValue-body" style="width:10%"> 字节
+                            </div>
+                        </div>
+                    </div>
+                    <!-- assert body end -->
+                    <!-- assert time begin -->
+                    <div role="tabpanel" class="tab-pane" id="asserttimepanel">
+                        <div class="panel-body" id="assert-time-panel">
+                            <div class="lineitem">
+                                connect  timeout: <input type="text" name="connectTimeout" value="5"> 秒
+                            </div>
+                            <div class="lineitem">
+                                response timeout: <input type="text" name="responseTimeout" value="10"> 秒
+                            </div>
+                        </div>
+                    </div>
+                    <!-- assert time ennd -->
+                    <!-- assert header begin -->
+                    <div role="tabpanel" class="tab-pane" id="assertheaderpanel">
+                        <div class="panel-body" id="assert-header-panel">
+                            <div class="lineitem">
+                                equals:<input type="text" name="equalValue-header" style="width:90%">
+                            </div>
+                            <div class="lineitem">
+                                contains:
+                                <label class="checkbox-inline">
+                                  <input type="checkbox" name="useRegx-header" value="1"> 正则匹配
+                                </label>
+                                <input type="text" name="containValue-header" style="width:85%">
+                            </div>
+                            <div class="lineitem">
+                                length:
+                                <label class="radio-inline">
+                                  <input type="radio" name="lengthRadioOptions-header" value="0"> 小于
+                                </label>
+                                <label class="radio-inline">
+                                  <input type="radio" name="lengthRadioOptions-header" value="1"> 等于
+                                </label>
+                                <label class="radio-inline">
+                                  <input type="radio" name="lengthRadioOptions-header" value="2"> 大于
+                                </label>
+                                <input type="text" name="lengthValue-header" style="width:10%"> 字节
+                            </div>
+                        </div>
+                    </div>
+                    <!-- assert header end -->
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <span class="panelstyle">Step 03: Choise Avaliable Machines</span>
+                </div>
+            </div>
+            <div id="machinelistdiv" class="row" style="padding:10px">
+            </div>
+        </div>
+
+        <div>
+            <div class="panel panel-info" id="runtimeConfig">
+                <div class="panel-heading">
+                    <span class="panelstyle">Step 04: Runtime Configs</span>
+                </div>
+            </div>
+            <div class="lineitem">
+                <ul class="list-inline">
+                    <li><label><span style="color:red">*</span>并发量：</label><input id="concurrent" name="concurrent" type="text" value="10"> <label><span style="color:red">*</span>持续时间：</label><input id="looptime" name="looptime" value="120" type="text"></li>
+                    <li>
+                        <label class="radio-inline">
+                          <input type="radio" name="looptimeOptions" value="0" checked="checked">秒
+                        </label>
+                        <label class="radio-inline">
+                          <input type="radio" name="looptimeOptions" value="1">分
+                        </label>
+                        <label class="radio-inline">
+                          <input type="radio" name="looptimeOptions" value="2">时
+                        </label>
+                    </li>
+                    <li><label>启动延迟：</label><input name="startDelay" type="text"> 秒</li>
+                </ul>
+
+                <ul class="list-inline">
+                    <li><a class="btn btn-info" id="startbtn">start mission</a></li>
+                    <li><a class="btn btn-danger" id="stopbtn">stop mission</a></li>
+                    <li><a class="btn btn-warning" id="clearbtn">clear data</a></li>
+                    <li><a class="btn btn-success" id="publishbtn">publish report</a></li>
+                </ul>
+
+            </div>
+        </div>
+    </form>
+
+    <hr>
+
+    <div id="processingdiv" style="display:none">
+        <div class="progress progress-striped active">
+            <div id="progressbar" class="progress-bar progress-bar-warning" role="progressbar" aria-valuemax="7" data-transitiongoal="1"></div>
+        </div>
+        <div id="initialdetail" style="text-align:center">
+            正在<span id="initialstate">解析mission配置</span>...
+        </div>
+
+        <div>
+            <label>状态：</label><button class="btn btn-danger btn-xs" id="runningstate">正在初始化压测环境</button> <label> time elapsed: </label><span id="elapsed">0</span> / <span id="looptime-state">60</span>
+        </div>
+
+        <div>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>label</th>
+                        <th>样本量</th>
+                        <th>最小响应时间</th>
+                        <th>最大响应时间</th>
+                        <th>平均响应时间</th>
+                        <th>吞吐量</th>
+                        <th>错误数</th>
+                        <th>错误百分比</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>总体</td>
+                        <td id="samples"></td>
+                        <td id="min-time"></td>
+                        <td id="max-time"></td>
+                        <td id="avg-time"></td>
+                        <td id="capacity"></td>
+                        <td id="errors"></td>
+                        <td id="error-percent"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div style="height:600px">
+
+        </div>
+    </div>
+{% endblock %}
+
+{% block script %}
+    {{ super() }}
+    <script src="/static/js/bootstrap-progressbar.min.js"></script>
+<script>
+    $(function(){
+        var $btn = $("#startbtn")
+
+        sessionStorage.choicedMachine = parseInt(0)
+
+        getMachines();
+
+        if(localStorage.runningjob){
+            $btn.button('loading')
+            $("#startbtn").html("show running mission");
+            $("#processingdiv").show();
+            freshStatus($btn,localStorage.runningjob);
+        }
+
+        $("#startbtn").click(function(){
+            if(!validateForm()){
+                return
+            }
+
+            $btn.button('loading')
+            if(!localStorage.runningjob){
+                var formdata = new FormData($("#newmissionform")[0])
+                $.ajax({
+                    url:"/newmission",
+                    type:"POST",
+                    data:formdata,
+                    dataType:"JSON",
+                    cache:false,
+                    processData:false,
+                    contentType:false,
+                    error:function(request){
+                        layer.msg(request.status)
+                        localStorage.clear();
+                    },
+                    success:function(data){
+                        if(data.result){
+                            localStorage.runningjob = data.missionid;
+                            $("#processingdiv").show();
+                            $("html,body").animate({scrollTop:$("#runtimeConfig").offset().top},1000)
+                            freshStatus($btn,data.missionid);
+                        }else{
+                            layer.msg("运行失败:"+data.errorMsg)
+                        }
+                    }
+                })
+            }else{
+                $("html,body").animate({scrollTop:$("#runtimeConfig").offset().top},1000)
+            }
+        })
+    })
+
+    function freshStatus(btn,missionid){
+        var source = new EventSource("/getMissionStatus/"+missionid);
+        source.onmessage = function(event){
+            var resp = JSON.parse(event.data);
+            console.log(resp)
+            if(resp.status){
+                if(resp.status  == 'running'){
+                    $("#progressbar").removeClass("progress-bar-warning").addClass("progress-bar-danger").attr("aria-valuemax",resp.looptime).attr("data-transitiongoal",resp.progress);
+                    $("#runningstate").html("正在压测")
+                }else{
+                    $("#progressbar").removeClass("progress-bar-warning").removeClass("progress-bar-danger").addClass("progress-bar-success").attr("aria-valuemax",resp.looptime).attr("data-transitiongoal",resp.progress);
+                    $("#runningstate").removeClass("btn-danger").addClass("btn-success").html("压测完成")
+                    btn.button('reset');
+                    localStorage.clear()
+                }
+                $("#initialdetail").hide()
+                $('.progress .progress-bar').progressbar({display_text: 'center', use_percentage: false, amount_format: function(p, t) {return p + ' / ' + t;}});
+                $("#elapsed").html(resp.elapsed)
+                $("#samples").html(resp.samples)
+                $("#min-time").html(resp.mintime)
+                $("#max-time").html(resp.maxtime)
+                $("#avg-time").html(resp.avgtime)
+                $("#capacity").html(resp.capacity)
+                $("#errors").html(resp.errors)
+                $("#error-percent").html(resp.errorpercent)
+            }else{
+                $("#progressbar").attr("data-transitiongoal",resp.progress);
+                $('.progress .progress-bar').progressbar({display_text: 'center', use_percentage: false, amount_format: function(p, t) {return p + ' / ' + t;}});
+                $("#initialstate").html(resp.initialstate)
+            }
+        }
+    }
+
+    function validateForm(){
+        if(!$.trim($("#missionName").val())){
+            $("#missionName").focus();
+            layer.msg("名称不能为空");
+            return false;
+        }
+
+        if(!$.trim($("#url").val())){
+            $("#url").focus();
+            layer.msg("url不能为空");
+            return false;
+        }
+
+        if(!$.trim($("#concurrent").val())){
+            $("#concurrent").focus();
+            layer.msg("请输入并发量");
+            return false;
+        }
+
+        if(!$.trim($("#looptime").val())){
+            $("#looptime").focus();
+            layer.msg("请输入持续时间");
+            return false;
+        }
+
+        if(parseInt(sessionStorage.choicedMachine) == 0){
+            layer.msg("请选择执行机器")
+            return false;
+        }
+
+        return true;
+    }
+
+    function getMachines(){
+        $.ajax({
+            url:"/getmachines?source=0",
+            type:"get",
+            error:function(request){
+                layer.msg("获取机器信息失败:"+request.status)
+            },
+            success:function(data){
+                $("#machinelistdiv").append(data);
+            }
+        })
+    }
+
+    function showChange(id){
+        if($("#machinediv_"+id).css("background-color") == 'rgba(0, 0, 0, 0)'){
+            $("#machinediv_"+id).css("background-color","#87CEFF")
+            sessionStorage.choicedMachine = parseInt(sessionStorage.choicedMachine) + 1
+        }else{
+            $("#machinediv_"+id).css("background-color","rgba(0, 0, 0, 0)")
+            sessionStorage.choicedMachine = parseInt(sessionStorage.choicedMachine) - 1
+        }
+
+    }
+
+</script>
+
+
+{% endblock %}
+

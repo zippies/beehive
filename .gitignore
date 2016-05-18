@@ -1,0 +1,9 @@
+__pycache__
+bower_components
+logs
+*.pkl
+data.sqlite
+bin
+pkg
+github.com
+gopkg.in
