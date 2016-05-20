@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}
+    machines
+{% endblock %}
+
+
+{% block csssrc %}
+    {{ super() }}
+{% endblock %}
+
+{% block script %}
+    {{ super() }}
+<script>
+    function sshType(type){
+        if(type=='password'){
+            $("#passworddiv").show()
+            $("#publickeydiv").hide()
+            $("#radio-password").attr("checked","checked")
+            $("#radio-publickey").removeAttr("checked")
+        }else{
+            $("#passworddiv").hide()
+            $("#publickeydiv").show()
+            $("#radio-publickey").attr("checked","checked")
+            $("#radio-password").removeAttr("checked")
+        }
+    }
+
+    function validateSubmit(){
+        if(!$.trim($("#name").val())){
+            layer.msg("名称不能为空")
+            $("#name").focus()
+            return false
+        }
+
+        if(!$.trim($("#ip").val())){
+            layer.msg("ip不能为空")
+            $("#ip").focus()
+            return false
+        }
+
+        if(!$.trim($("#user").val())){
+            layer.msg("user不能为空")
+            $("#user").focus()
+            return false
+        }
+
+        if($("#radio-password").attr("checked") == 'checked'){
+            if(!$.trim($("#password").val())){
+                layer.msg("密码不能为空")
+                $("#password").focus()
+                return false
+            }
+        }else{
+            if($.trim($("#file").val()) == ''){
+                layer.msg("请上传rsa文件")
+                $("#file").focus()
+                return false
+            }
+        }
+
+        return true
+    }
+
+    function freshMachine(){
+        $.ajax({
+            url:"/getmachines?source=1",
+            type:"get",
+            error:function(request){
+                layer.msg("刷新失败:"+request.status)
+            },
+            success:function(data){
+                $("#machinelistdiv").empty().append(data)
+            }
+        })
+    }
+
+	function editmachine(id){
+        $("#editmachine_"+id).hide()
+        $("#saveedit_"+id).show()
+        $(".machineinfo_"+id).removeAttr("disabled")
+	}
+
+	function saveedit(id){
+        var values = "?id="+ id + "&";
+        $(".machineinfo_"+id).each(function(){
+            values += $(this).attr("name") + "=" + $(this).val() + "&"
+        })
+        values = values.substring(0,values.length-1)
+        $.get("/editmachine"+values,function(data){
+            if(data.result){
+                layer.msg('保存成功', {icon: 1})
+            }else{
+                layer.msg('失败:'+data.info, {icon: 2})
+            }
+        })
+        $("#saveedit_"+id).hide()
+        $("#editmachine_"+id).show()
+        $(".machineinfo_"+id).attr("disabled","disabled")
+	}
+
+
+	function delmachine(id){
+        layer.confirm("确定删除吗？",{btn:['确定','取消']},function(){
+            $.get("/delmachine/"+id,function(data){
+                if(data.result){
+                    layer.msg('删除成功', {icon: 6})
+                    $("#machinediv_"+id).remove()
+                }else{
+                    layer.msg('失败:'+data.info, {icon: 5})
+                }
+            })
+        },function(){
+            console.log('取消')
+        })
+	}
+
+
+
+
+
+
+
+
+
+    $(function(){
+        freshMachine();
+
+        $("#submit").click(function(){
+            if(!validateSubmit()){
+                return
+            }
+
+            var formdata = new FormData($("#newmachineform")[0])
+            $.ajax({
+                url:"/newmachine",
+                type:"POST",
+                data:formdata,
+                dataType:"JSON",
+                cache:false,
+                processData:false,
+                contentType:false,
+                error:function(request){
+                    layer.msg("添加失败:"+request.status)
+                },
+                success:function(data){
+                    if(data.result){
+                        layer.msg("添加成功")
+                        freshMachine();
+                    }else{
+                        layer.msg("添加失败:"+data.errorMsg)
+                    }
+                }
+            })
+        })
+
+    })
+</script>
+
+{% endblock %}
+
+{% block container %}
+<form id="newmachineform" method="post" enctype="multipart/form-data">
+    <ul class="list-inline">
+        <li><label><span style="color:red">*</span>机器名称:</label></li>
+        <li><input class="form-control" id="name" name="name" type="text"></li>
+        <li><label><span style="color:red">*</span>机器IP:</label></li>
+        <li><input class="form-control" id="ip" name="ip" type="text"></li>
+        <li>
+            <label><span style="color:red">*</span>系统:</label>
+        </li>
+        <li>
+            <select class="form-control" name="system" id="system">
+                <option value="windows">windows</option>
+                <option value="linux">linux</option>
+                <option value="mac">mac</option>
+            </select>
+        </li>
+        <li><label>内存大小:</label></li>
+        <li><input class="form-control" type="text" name="memory"></li>
+        <li><label>磁盘大小:</label></li>
+        <li><input class="form-control" type="text" name="disk"></li>
+    </ul>
+
+    <ul class="list-inline">
+        <li><label><span style="color:red">*</span>登录方式:</label></li>
+        <li>
+            <label class="radio-inline">
+                <input type="radio" id="radio-password" name="sshtype" value="password" checked="checked" onclick="sshType('password')"> password
+            </label>
+        </li>
+        <li>
+            <label class="radio-inline">
+                <input type="radio" id="radio-publickey" name="sshtype" value="publickey" onclick="sshType('publickey')"> public key
+            </label>
+        </li>
+        <li><label><span style="color:red">*</span>端口</label></li>
+        <li><input class="form-control" name="port" type="text" value="22"></li>
+        <li><label><span style="color:red">*</span>user:</label></li>
+        <li><input class="form-control" id="user" name="user" type="text"></li>
+        <li><label><span style="color:red">*</span>password:</label></li>
+        <li id="passworddiv">
+            <input class="form-control" id="password" name="password" type="password">
+        </li>
+        <li id="publickeydiv" style="display:none">
+            <input class="form-control" type="file" id="file" name="file" style="width:200px">
+        </li>
+
+        <li>
+            <a class="btn btn-primary" id="submit">确认添加</a>
+        </li>
+    </ul>
+</form>
+
+<hr>
+
+<div class="col-lg-12" id="machinelistdiv">
+</div>
+{% endblock %}
