@@ -40,6 +40,7 @@ class QueenBee(Thread):
         Thread.__init__(self)
         self.id = id
         self.machines = machines
+        self.hasLocal = False
         self.config = config
         self.statusController = statusController
         self.form = form
@@ -53,13 +54,16 @@ class QueenBee(Thread):
         self.errorDetails = Queue()
         self.analysisBees = []
         self.starttime = None
-        self.min_elapsed = None
-        self.max_elapsed = None
+        self.min_elapsed = 10
+        self.max_elapsed = 0
         self.looptime = 0
         self.end = False
 
 
     def dispatchClient(self,machine):
+        if machine.ip == self.config.localip:
+            self.hasLocal = True
+            return
         ssh = paramiko.SSHClient()
         ssh.load_system_host_keys()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -119,7 +123,8 @@ class QueenBee(Thread):
         connectTimeout = self.form.get("connectTimeout")
         responseTimeout = self.form.get("responseTimeout")
         concurrent = int(self.form.get("concurrent"))
-        beecount = int(self.form.get("beecount"))
+        beecount = self.form.get("beecount")
+
         url = self.form.get("url")
         method = self.form.get("type")
 
@@ -129,6 +134,13 @@ class QueenBee(Thread):
             self.looptime = int(self.form.get("looptime")) * 60
         else:
             self.looptime = int(self.form.get("looptime")) * 3600
+
+
+        if not beecount and int(concurrent/2) > 500:
+            beecount = 500
+        else:
+            beecount = int(concurrent/2)
+
 
         if self.form.get("checkbox-data") and self.form.get("checkbox-file"):
             data = self.form.get("requestbody")  #如果data中有{{ file-name }} 则从file中读取name字段代替
@@ -169,6 +181,7 @@ class QueenBee(Thread):
             self.redisclient.hset(machine.ip,"header",header)
             self.redisclient.hset(machine.ip,"data",data)
             #self.redisclient.hset(machine.ip,"status",0)
+            #self.redisclient.hmset(machine.ip,{"concurrent":conc_avg,"header":header,"data":data}
         ##############################################连接远程机器####################################################
         self.statusController.set(self.id, {"progress": 3, "initialstate": "连接远程机器/下发压测程序"})
 
@@ -195,6 +208,12 @@ class QueenBee(Thread):
 
         for bee in maleBees:
             bee.start()
+
+        localBee = None
+        if self.hasLocal:
+            localBee = Thread(target=self.hitHoney)
+            localBee.setDaemon(True)
+            localBee.start()
 
         femaleBees = []
         for i in range(beecount):
@@ -224,6 +243,10 @@ class QueenBee(Thread):
 
         for bee in maleBees:
             bee.join()
+
+        if self.hasLocal:
+            localBee.join()
+
         print("Mission finished and bees on the way home")
         self.statusController.set(self.id, {"looptime":self.looptime,"progress": self.looptime, "status":"running","initialstate": "开始压测"})
 
@@ -235,8 +258,6 @@ class QueenBee(Thread):
                 time.sleep(2)
 
         self.clear()
-
-
 
         print("All bees returned",self.samples)
 
@@ -267,10 +288,17 @@ class QueenBee(Thread):
 
         return ready
 
-    def hitHoney(self,sshClient):
-        stdin,stdout,stderr = sshClient.exec_command("./clienthive %s %s" %(self.config.nsq_addr,self.config.redis_addr))
-        self.readyBee.put(1)
-        output = stdout.read()
+    def hitHoney(self,sshClient=None):
+        cmd = "./clienthive %s %s" %(self.config.nsq_addr,self.config.redis_addr)
+        if not sshClient:
+            stdout = os.popen(cmd)
+            self.readyBee.put(1)
+            print("local ready")
+            output = stdout.read()
+        else:
+            stdin,stdout,stderr = sshClient.exec_command(cmd)
+            self.readyBee.put(1)
+            output = stdout.read()
 
     def collectGoodHoney(self,honeyid):
         """
@@ -341,9 +369,9 @@ class QueenBee(Thread):
 
         throught = (self.samples-self.errors) / (elapsed if elapsed < self.looptime else self.looptime)
         
-        newerrors = []
-        for i in range(self.errorDetails.qsize()):
-            newerrors.append(self.errorDetails.get())
+        #newerrors = []
+        #for i in range(self.errorDetails.qsize()):
+        #    newerrors.append(self.errorDetails.get())
 
         return {
         "progress":int(elapsed) if elapsed < self.looptime else self.looptime,
@@ -356,8 +384,8 @@ class QueenBee(Thread):
         "avg_elapsed":round(avg_elapsed,3),
         "throught":round(throught,2),
         "errors":self.errors,
-        "error_percent":round(error_percent,2),
-        "newerrors":newerrors
+        "error_percent":round(error_percent,2)
+        #"newerrors":newerrors
         }
 
     def dumpStatus(self):
