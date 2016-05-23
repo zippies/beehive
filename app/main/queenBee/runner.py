@@ -44,7 +44,8 @@ class QueenBee(Thread):
         self.config = config
         self.statusController = statusController
         self.form = form
-        self.file = file
+        self.realpath = "%s/%s" %(self.config.UPLOAD_FOLDER,file.filename)
+        file.save(self.realpath)
         self.redisclient = None
         self.sshclients = []
         self.readyBee = Queue()
@@ -58,7 +59,6 @@ class QueenBee(Thread):
         self.max_elapsed = 0
         self.looptime = 0
         self.end = False
-
 
     def dispatchClient(self,machine):
         if machine.ip == self.config.localip:
@@ -116,8 +116,8 @@ class QueenBee(Thread):
         """
         ############################################解析mission配置######################################################
         self.statusController.set(self.id,{"progress":1,"initialstate":"解析mission配置"})
-        data = None
-        file = None
+
+        data = self.form.get("requestbody") or {}
         header = self.form.get("requestheader") or {}
         startDelay = self.form.get("startDelay")
         connectTimeout = self.form.get("connectTimeout")
@@ -141,17 +141,6 @@ class QueenBee(Thread):
         else:
             beecount = int(concurrent/2)
 
-
-        if self.form.get("checkbox-data") and self.form.get("checkbox-file"):
-            data = self.form.get("requestbody")  #如果data中有{{ file-name }} 则从file中读取name字段代替
-            file = self.file
-        elif self.form.get("checkbox-data"):
-            data = self.form.get("requestbody")
-        elif self.form.get("checkbox-file"):
-            data = {}
-        else:
-            data = self.form.get("requestbody")
-
         ####  check options
         bodylengthtype = self.form.get("lengthRadioOptions-body")
         bodylength = self.form.get("lengthValue-body")
@@ -165,6 +154,7 @@ class QueenBee(Thread):
         headerContainValue = self.form.get("containValue-header")
         ############################################初始化redis######################################################
         self.statusController.set(self.id, {"progress": 2, "initialstate": "初始化redis参数"})
+
         self.redisclient = redis.Redis(host=self.config.redis_host,port=self.config.redis_port,db=self.config.redis_db)
         self.redisclient.set("url",url)
         self.redisclient.set("responseTimeout", responseTimeout)
@@ -180,8 +170,21 @@ class QueenBee(Thread):
                 self.redisclient.hset(machine.ip,"concurrent",conc_avg)
             self.redisclient.hset(machine.ip,"header",header)
             self.redisclient.hset(machine.ip,"data",data)
-            #self.redisclient.hset(machine.ip,"status",0)
-            #self.redisclient.hmset(machine.ip,{"concurrent":conc_avg,"header":header,"data":data}
+
+        if "{{file[" in data and self.form.get("checkbox-file"):
+            with open(self.realpath,encoding="utf-8") as f:
+                lines = [line.strip() for line in f.readlines() if line.strip()]
+                for line in lines:
+                    self.redisclient.lpush("filedata",line)
+
+                self.redisclient.set("dataCount",len(lines))
+        elif self.form.get("checkbox-file"):
+            with open(self.realpath,"rb") as f:
+                self.redisclient.lpush("file",f.read())
+        else:
+            pass
+
+        return
         ##############################################连接远程机器####################################################
         self.statusController.set(self.id, {"progress": 3, "initialstate": "连接远程机器/下发压测程序"})
 
@@ -267,8 +270,8 @@ class QueenBee(Thread):
 
         self.redisclient.flushdb()
 
-        r = requests.delete("http://104.236.5.165:4171/api/topics/failed")
-        r = requests.delete("http://104.236.5.165:4171/api/topics/success")
+        r = requests.delete("http://%s:4171/api/topics/failed" %self.config.nsq_host)
+        r = requests.delete("http://%s:4171/api/topics/success" %self.config.nsq_host)
         print("topic deleted")
 
     def clientReady(self):
@@ -289,7 +292,7 @@ class QueenBee(Thread):
         return ready
 
     def hitHoney(self,sshClient=None):
-        cmd = "./clienthive %s %s" %(self.config.nsq_addr,self.config.redis_addr)
+        cmd = "./clienthive %s:4150 %s:%s" %(self.config.nsq_host,self.config.redis_host,self.config.redis_port)
         if not sshClient:
             stdout = os.popen(cmd)
             self.readyBee.put(1)
@@ -316,7 +319,7 @@ class QueenBee(Thread):
             Cookies       []*http.Cookie
         }
         """
-        bee = gnsq.Reader("success","goodBee",self.config.nsq_addr)
+        bee = gnsq.Reader("success","goodBee","%s:4150" %self.config.nsq_host)
         self.analysisBees.append(bee)
 
         @bee.on_message.connect
@@ -339,7 +342,7 @@ class QueenBee(Thread):
 
 
     def collectBadHoney(self,honeyid):
-        bee = gnsq.Reader("failed","badBee",self.config.nsq_addr)
+        bee = gnsq.Reader("failed","badBee","%s:4150" %self.config.nsq_host)
         self.analysisBees.append(bee)
         @bee.on_message.connect
         def handler(bee, message):
@@ -353,7 +356,7 @@ class QueenBee(Thread):
 
     @property
     def honeyCount(self):
-        url = "http://104.236.5.165:4171/api/nodes/nsp:4151"
+        url = "http://%s:4171/api/nodes/nsp:4151" %self.config.nsq_host
         message_count = requests.get(url).json()["total_messages"]
         return message_count
 
@@ -368,10 +371,6 @@ class QueenBee(Thread):
             error_percent = 0
 
         throught = (self.samples-self.errors) / (elapsed if elapsed < self.looptime else self.looptime)
-        
-        #newerrors = []
-        #for i in range(self.errorDetails.qsize()):
-        #    newerrors.append(self.errorDetails.get())
 
         return {
         "progress":int(elapsed) if elapsed < self.looptime else self.looptime,
@@ -385,7 +384,6 @@ class QueenBee(Thread):
         "throught":round(throught,2),
         "errors":self.errors,
         "error_percent":round(error_percent,2)
-        #"newerrors":newerrors
         }
 
     def dumpStatus(self):

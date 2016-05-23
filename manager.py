@@ -4,6 +4,7 @@ from app.models import Machine
 from flask.ext.script import Manager,Shell
 from flask.ext.migrate import Migrate,MigrateCommand
 from werkzeug.contrib.fixers import ProxyFix
+from config import Config
 import multiprocessing,platform
 
 app = createApp()
@@ -16,12 +17,13 @@ manager.add_command('db',MigrateCommand)
 @manager.command
 def dbinit():
 	db.create_all()
+	config = Config()
 	machine = Machine("本机")
-	machine.ip = "127.0.0.1"
+	machine.ip = config.localip
 	machine.cpu = multiprocessing.cpu_count()
 	machine.system = platform.system().lower()
-	machine.disk = "450G"
-	machine.memory = "4G"
+	machine.disk = config.disk
+	machine.memory = config.memory
 	db.session.add(machine)
 	db.session.commit()
 	print('dbinit ok')
