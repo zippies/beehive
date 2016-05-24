@@ -44,15 +44,17 @@ class QueenBee(Thread):
         self.config = config
         self.statusController = statusController
         self.form = form
-        self.realpath = "%s/%s" %(self.config.UPLOAD_FOLDER,file.filename)
-        file.save(self.realpath)
+        if file.filename:
+            self.realpath = "%s/%s" %(self.config.UPLOAD_FOLDER,file.filename)
+            file.save(self.realpath)
         self.redisclient = None
         self.sshclients = []
-        self.readyBee = Queue()
         self.samples = 0
         self.totalelapsed = 0
         self.errors = 0
         self.errorDetails = Queue()
+        self.successSample = None
+        self.errorSample = None
         self.analysisBees = []
         self.starttime = None
         self.min_elapsed = 10
@@ -135,7 +137,6 @@ class QueenBee(Thread):
         else:
             self.looptime = int(self.form.get("looptime")) * 3600
 
-
         if not beecount and int(concurrent/2) > 500:
             beecount = 500
         else:
@@ -156,35 +157,31 @@ class QueenBee(Thread):
         self.statusController.set(self.id, {"progress": 2, "initialstate": "初始化redis参数"})
 
         self.redisclient = redis.Redis(host=self.config.redis_host,port=self.config.redis_port,db=self.config.redis_db)
-        self.redisclient.set("url",url)
-        self.redisclient.set("responseTimeout", responseTimeout)
-        self.redisclient.set("connectTimeout", connectTimeout)
-        self.redisclient.set("startDelay", startDelay)
-        self.redisclient.set("looptime", self.looptime)
-        self.redisclient.set("method", method)
         conc_avg,conc_left = int(concurrent / len(self.machines)),concurrent%len(self.machines)
         for index,machine in enumerate(self.machines):
+            key = "%s.%s" %(self.id,machine.ip)
+            self.redisclient.hmset(key,{"url":url,"responseTimeout":responseTimeout,"connectTimeout":connectTimeout,"startDelay":startDelay,"looptime":self.looptime,"method":method})
+
             if index == 0:
-                self.redisclient.hset(machine.ip,"concurrent",conc_avg+conc_left)
+                self.redisclient.hset(key,"concurrent",conc_avg+conc_left)
             else:
-                self.redisclient.hset(machine.ip,"concurrent",conc_avg)
-            self.redisclient.hset(machine.ip,"header",header)
-            self.redisclient.hset(machine.ip,"data",data)
+                self.redisclient.hset(key,"concurrent",conc_avg)
+            self.redisclient.hset(key,"header",header)
+            self.redisclient.hset(key,"data",data)
 
         if "{{file[" in data and self.form.get("checkbox-file"):
             with open(self.realpath,encoding="utf-8") as f:
                 lines = [line.strip() for line in f.readlines() if line.strip()]
                 for line in lines:
-                    self.redisclient.lpush("filedata",line)
+                    self.redisclient.lpush("filedata-%s" %self.id,line)
 
-                self.redisclient.set("dataCount",len(lines))
+                self.redisclient.set("dataCount-%s" %self.id,len(lines))
         elif self.form.get("checkbox-file"):
             with open(self.realpath,"rb") as f:
-                self.redisclient.lpush("file",f.read())
+                self.redisclient.lpush("file-%s" %self.id,f.read())
         else:
             pass
 
-        return
         ##############################################连接远程机器####################################################
         self.statusController.set(self.id, {"progress": 3, "initialstate": "连接远程机器/下发压测程序"})
 
@@ -231,7 +228,7 @@ class QueenBee(Thread):
             bee.start()
 
         if self.clientReady():
-            self.redisclient.set("status",1)
+            self.redisclient.set("status-%s" %self.id,1)
             self.starttime = time.time()
             self.statusController.set(self.id, {"looptime":self.looptime,"progress": 1, "status":"running","initialstate": "开始压测"})
         else:
@@ -262,45 +259,54 @@ class QueenBee(Thread):
 
         self.clear()
 
-        print("All bees returned",self.samples)
+        print("All bees returned,got",self.samples,"messages")
 
     def clear(self):
         for bee in self.analysisBees:
             bee.close()
 
-        self.redisclient.flushdb()
-
-        r = requests.delete("http://%s:4171/api/topics/failed" %self.config.nsq_host)
-        r = requests.delete("http://%s:4171/api/topics/success" %self.config.nsq_host)
-        print("topic deleted")
-
     def clientReady(self):
         ready = True
-        for client in self.sshclients:
-            start = time.time()
-            while time.time()-start < 10:
-                stdin,stdout,stderr = client.exec_command("pgrep -lf clienthive")
-                info = stdout.read().decode()
-                if "clienthive" in info:
-                    break
-                else:
-                    print("not ready",info)
-            else:
-                ready = False
+        count = 0
+        total = len(self.machines)
+        start = time.time()
+        while time.time()-start < 10:
+            for machine in self.machines:
+                key = "%s.%s" %(self.id,machine.ip)
+                status = self.redisclient.hget(key,"status")
+                if status and int(status) == 1:
+                    count += 1
+
+            if count == total:
                 break
+            else:
+                count = 0
+        else:
+            ready = False
+        # for client in self.sshclients:
+        #     start = time.time()
+        #     while time.time()-start < 10:
+        #         stdin,stdout,stderr = client.exec_command("pgrep -lf clienthive")
+        #         info = stdout.read().decode()
+        #         if "clienthive" in info:
+        #             break
+        #         else:
+        #             print("not ready",info)
+        #     else:
+        #         ready = False
+        #         break
 
         return ready
 
     def hitHoney(self,sshClient=None):
-        cmd = "./clienthive %s:4150 %s:%s" %(self.config.nsq_host,self.config.redis_host,self.config.redis_port)
+        cmd = "./clienthive %s:4150 %s:%s %s" %(self.config.nsq_host,self.config.redis_host,self.config.redis_port,self.id)
         if not sshClient:
             stdout = os.popen(cmd)
-            self.readyBee.put(1)
             print("local ready")
             output = stdout.read()
         else:
             stdin,stdout,stderr = sshClient.exec_command(cmd)
-            self.readyBee.put(1)
+            print("one remote ready")
             output = stdout.read()
 
     def collectGoodHoney(self,honeyid):
@@ -319,7 +325,7 @@ class QueenBee(Thread):
             Cookies       []*http.Cookie
         }
         """
-        bee = gnsq.Reader("success","goodBee","%s:4150" %self.config.nsq_host)
+        bee = gnsq.Reader("success-%s" %self.id,"goodBee","%s:4150" %self.config.nsq_host)
         self.analysisBees.append(bee)
 
         @bee.on_message.connect
@@ -337,12 +343,17 @@ class QueenBee(Thread):
 
             if m["ErrorMsg"]:
                 self.errors += 1
+                self.errorDetails.put(message.body.decode())
+                if not self.errorSample:
+                    self.errorSample = message.body.decode()
 
+            if not self.successSample:
+                self.successSample = message.body.decode()
         bee.start()
 
 
     def collectBadHoney(self,honeyid):
-        bee = gnsq.Reader("failed","badBee","%s:4150" %self.config.nsq_host)
+        bee = gnsq.Reader("failed-%s" %self.id,"badBee","%s:4150" %self.config.nsq_host)
         self.analysisBees.append(bee)
         @bee.on_message.connect
         def handler(bee, message):
@@ -350,14 +361,20 @@ class QueenBee(Thread):
             m = message.body.decode()
             self.errors += 1
             self.errorDetails.put(m)
+            if not self.errorSample:
+                self.errorSample = m
 
         bee.start()
-
 
     @property
     def honeyCount(self):
         url = "http://%s:4171/api/nodes/nsp:4151" %self.config.nsq_host
-        message_count = requests.get(url).json()["total_messages"]
+        topics = requests.get(url).json()["topics"]
+        message_count = 0
+        for topic in topics:
+            if topic["topic_name"] in ["success-%s" %self.id,"failed-%s" %self.id]:
+                message_count += topic["message_count"]
+
         return message_count
 
     @property
@@ -383,7 +400,9 @@ class QueenBee(Thread):
         "avg_elapsed":round(avg_elapsed,3),
         "throught":round(throught,2),
         "errors":self.errors,
-        "error_percent":round(error_percent,2)
+        "error_percent":round(error_percent,2),
+        "success_sample":self.successSample if self.end else "",
+        "error_sample":self.errorSample if self.end else ""
         }
 
     def dumpStatus(self):

@@ -72,7 +72,7 @@
                                 </li>
                                 <li><input type="file" name="file"></li>
                             </ul>
-                            <textarea id="bodyarea" name="requestbody" class="form-control" style="height:100px">{"cellphone":18516042356,"password":"6547436690a26a399603a7096e876a2d"}</textarea>
+                            <textarea id="bodyarea" name="requestbody" class="form-control" style="height:100px">{"cellphone":"18516042356","password":"6547436690a26a399603a7096e876a2d"}</textarea>
                         </div>
                     </div>
                     <!-- body end -->
@@ -286,6 +286,19 @@
 
         $("#clearbtn").click(function(){
             localStorage.clear()
+            $("#errorplace").empty()
+            $("#elapsed").html()
+            $("#looptime-state").html()
+            $("#samples").html()
+            $("#min-time").html()
+            $("#max-time").html()
+            $("#avg-time").html()
+            $("#throught").html()
+            $("#errors").html()
+            $("#error-percent").html()
+            $("#processingdiv").hide();
+            $("#progressbar").removeClass("progress-bar-success").removeClass("progress-bar-danger").addClass("progress-bar-warning").attr("aria-valuemax","4").attr("data-transitiongoal","0");
+            $("#startbtn").removeAttr("disabled")
         })
 
 
@@ -294,7 +307,9 @@
                 return
             }
 
-            $btn.button('loading')
+            $(this).attr("disabled",true)
+            $("#clearbtn").attr("disabled",true)
+
             if(!localStorage.runningjob){
                 var formdata = new FormData($("#newmissionform")[0])
                 $.ajax({
@@ -314,7 +329,7 @@
                             localStorage.runningjob = data.missionid;
                             $("#processingdiv").show();
                             $("html,body").animate({scrollTop:$("#runtimeConfig").offset().top},1000)
-                            freshStatus($btn,data.missionid);
+                            freshStatus(data.missionid);
                         }else{
                             layer.msg("运行失败:"+data.errorMsg)
                         }
@@ -324,9 +339,33 @@
                 $("html,body").animate({scrollTop:$("#runtimeConfig").offset().top},1000)
             }
         })
+
+
+        $("#stopbtn").click(function(){
+            $.ajax({
+                url:"/stopmission/"+localStorage.runningjob,
+                type:"post",
+                error:function(request){
+                    layer.msg(request.status)
+                },
+                success:function(data){
+                    if(data.result){
+                        $("#startbtn").removeAttr("disabled")
+                        $("#clearbtn").removeAttr("disabled")
+                    }else{
+                        layer.msg("停止失败:"+data.errorMsg)
+                    }
+                }
+            })
+            $("#startbtn").removeAttr("disabled");
+
+        })
     })
 
-    function freshStatus(btn,missionid){
+
+
+
+    function freshStatus(missionid){
         var source = new EventSource("/getMissionStatus/"+missionid);
         source.onmessage = function(event){
             var resp = JSON.parse(event.data);
@@ -336,12 +375,15 @@
                     $("#progressbar").removeClass("progress-bar-warning").addClass("progress-bar-danger").attr("aria-valuemax",resp.looptime).attr("data-transitiongoal",resp.progress);
                     $("#runningstate").html("正在压测")
                 }else{
+                    console.log("finished here")
                     $("#progressbar").removeClass("progress-bar-warning").removeClass("progress-bar-danger").addClass("progress-bar-success").attr("aria-valuemax",resp.looptime).attr("data-transitiongoal",resp.progress);
                     $("#runningstate").removeClass("btn-danger").addClass("btn-success").html("压测完成")
-                    btn.button('reset');
+                    $("#startbtn").removeAttr("disabled");
+                    $("#clearbtn").removeAttr("disabled")
                     localStorage.clear();
                     source.close();
-                    console.log("set source to null")
+                    $("#errorplace").append("<li>"+resp.success_sample+"</li>")
+                    $("#errorplace").append("<li>"+resp.error_sample+"</li>")
                 }
                 $("#initialdetail").hide()
                 $('.progress .progress-bar').progressbar({display_text: 'center', use_percentage: false, amount_format: function(p, t) {return p + ' / ' + t;}});
@@ -354,10 +396,6 @@
                 $("#throught").html(resp.throught)
                 $("#errors").html(resp.errors)
                 $("#error-percent").html(resp.error_percent)
-                resp.newerrors.forEach(function(e){
-                    $("#errorplace").append("<li>"+e+"</li>")
-                })
-                
             }else{
                 $("#progressbar").attr("data-transitiongoal",resp.progress);
                 $('.progress .progress-bar').progressbar({display_text: 'center', use_percentage: false, amount_format: function(p, t) {return p + ' / ' + t;}});
