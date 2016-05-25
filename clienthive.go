@@ -26,10 +26,10 @@ var group_report sync.WaitGroup
 var group_client sync.WaitGroup
 var dataGenerator *ring.Ring
 
-func countTime(redis_conn redis.Conn, key string) {
+func countTime(redis_conn redis.Conn, missionid string) {
 	for {
 		time.Sleep(2 * 1e9)
-		status, err := redis_conn.Do("hget", key, "status")
+		status, err := redis_conn.Do("get", fmt.Sprintf("status-%v",missionid))
 		failOnError(err, "Failed to query redis")
 		currentStatus, err := strconv.Atoi(string(status.([]byte)))
 		failOnError(err, "Failed to convert <status>String to Int ")
@@ -267,7 +267,7 @@ func main() {
 	if len_ranint > 0{
 		for i := 0; i < dataCount; i++ {
 			matchlist := reg_file.FindStringSubmatch(s_data)
-			
+
 			indexdata, err := redis_conn.Do("lindex", fmt.Sprintf("filedata-%v", missionid), i)
 			failOnError(err, "Failed to query Redis")
 			values := strings.Split(string(indexdata.([]byte)), " ")
@@ -283,24 +283,6 @@ func main() {
 		dataGenerator.Value = s_data
 		dataGenerator = dataGenerator.Next()
 	}
-
-
-	// for i := 0; i < dataCount; i++ {
-	// 	if strings.Contains(s_data, "{{file[") {
-	// 		indexdata, err := redis_conn.Do("lindex", fmt.Sprintf("filedata-%v", missionid), i)
-	// 		failOnError(err, "Failed to query Redis")
-	// 		values := strings.Split(string(indexdata.([]byte)), " ")
-	// 		r_data := s_data
-	// 		for k, v := range values {
-	// 			r_data = strings.Replace(r_data, fmt.Sprintf("{{file[%v]}}", k), v, -1)
-	// 		}
-	// 		dataGenerator.Value = r_data
-	// 		dataGenerator = dataGenerator.Next()
-	// 	} else {
-	// 		dataGenerator.Value = s_data
-	// 		dataGenerator = dataGenerator.Next()
-	// 	}
-	// }
 
 	if redis_delay == nil {
 		conc_delay = float64(0)
@@ -378,7 +360,7 @@ func main() {
 				time.Sleep(time.Duration(conc_delay/float64(con)) * time.Nanosecond)
 				go startClient(missionid, client, string(url.([]byte)), string(method.([]byte)), header, looptime, worker, ip)
 			}
-			go countTime(redis_conn, key)
+			go countTime(redis_conn, missionid)
 			println("all clients startted ,looptime", looptime)
 
 			group_client.Wait()
