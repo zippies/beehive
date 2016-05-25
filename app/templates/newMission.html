@@ -62,14 +62,6 @@
                     <div role="tabpanel" class="tab-pane active" id="requestbodypanel">
                         <div class="panel-body" id="req-body-panel">
                             <ul class="list-inline">
-                                <li>
-                                    <label class="checkbox-inline">
-                                      <input type="checkbox" name="checkbox-data" value="1">data
-                                    </label>
-                                    <label class="checkbox-inline">
-                                      <input type="checkbox" name="checkbox-file" value="1">file
-                                    </label>
-                                </li>
                                 <li><input type="file" name="file"></li>
                             </ul>
                             <textarea id="bodyarea" name="requestbody" class="form-control" style="height:100px">{"cellphone":"18516042356","password":"6547436690a26a399603a7096e876a2d"}</textarea>
@@ -261,6 +253,7 @@
         </div>
 
         <div style="height:600px">
+            <span id="error-distribute"></span>
             <ul id="errorplace"></ul>
         </div>
     </div>
@@ -395,6 +388,7 @@
                 $("#avg-time").html(resp.avg_elapsed)
                 $("#throught").html(resp.throught)
                 $("#errors").html(resp.errors)
+                $("#error-distribute").html(resp.error_distribute)
                 $("#error-percent").html(resp.error_percent)
             }else{
                 $("#progressbar").attr("data-transitiongoal",resp.progress);

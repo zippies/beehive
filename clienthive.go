@@ -26,7 +26,7 @@ var group_report sync.WaitGroup
 var group_client sync.WaitGroup
 var dataGenerator *ring.Ring
 
-func countTime(redis_conn redis.Conn,key string) {
+func countTime(redis_conn redis.Conn, key string) {
 	for {
 		time.Sleep(2 * 1e9)
 		status, err := redis_conn.Do("hget", key, "status")
@@ -86,7 +86,7 @@ func sendResult(missionid string,
 		report.Machine_ip = ip
 		report.ErrorMsg = error.Error()
 		report.StatusCode = -1
-		topic = fmt.Sprintf("failed-%v",missionid)
+		topic = fmt.Sprintf("failed-%v", missionid)
 	} else {
 		report.Method = method
 		report.Url = url
@@ -102,7 +102,7 @@ func sendResult(missionid string,
 		report.Header = resp.Header
 		report.Cookies = resp.Cookies()
 		report.Machine_ip = ip
-		topic = fmt.Sprintf("success-%v",missionid)
+		topic = fmt.Sprintf("success-%v", missionid)
 		defer resp.Body.Close()
 	}
 
@@ -127,23 +127,22 @@ func randomPhone() string {
 	return fmt.Sprintf("%v%v", phoneHead[ranindex], randomInt(10000000, 19999999))
 }
 
-
 func dealRandom(value interface{}) []byte {
 	tmpstr := fmt.Sprint(value)
 	reg_phone := regexp.MustCompile(`{{ *randomPhone\(\) *}}`)
-	reg_int := regexp.MustCompile(`{{ *randomInt\(\d+,\d+\) *}}`)
+	reg_int := regexp.MustCompile(`{{ *randomInt\((\d+),(\d+)\) *}}`)
 
 	len_ranint := len(reg_int.FindAllString(tmpstr, -1))
 
 	for i := 0; i < len_ranint; i++ {
-		matchstr := reg_int.FindString(tmpstr)
-		nums := strings.Split(strings.Split(strings.Split(matchstr, "randomInt(")[1], ")")[0], ",")
-		min, err := strconv.Atoi(nums[0])
+		matchlist := reg_int.FindStringSubmatch(tmpstr)
+		//nums := strings.Split(strings.Split(strings.Split(matchstr, "randomInt(")[1], ")")[0], ",")
+		min, err := strconv.Atoi(matchlist[1])
 		failOnError(err, "Failed:randomInt only support int params")
-		max, err := strconv.Atoi(nums[1])
+		max, err := strconv.Atoi(matchlist[2])
 		failOnError(err, "Failed:randomInt only support int params")
 		ranint := randomInt(min, max)
-		tmpstr = strings.Replace(tmpstr, matchstr, fmt.Sprintf("%v", ranint), 1)
+		tmpstr = strings.Replace(tmpstr, matchlist[0], fmt.Sprintf("%v", ranint), 1)
 	}
 
 	len_ranphone := len(reg_phone.FindAllString(tmpstr, -1))
@@ -206,7 +205,7 @@ func main() {
 	//获取本机ip
 	ip := getLocalIp()
 
-	key := fmt.Sprintf("%v.%v",missionid,ip)
+	key := fmt.Sprintf("%v.%v", missionid, ip)
 
 	//初始化并发量
 	var con int
@@ -217,17 +216,17 @@ func main() {
 	var conc_delay float64
 	var dataCount int
 
-	method, err := redis_conn.Do("hget",key ,"method")
+	method, err := redis_conn.Do("hget", key, "method")
 	failOnError(err, "Failed to query Redis")
-	url, err := redis_conn.Do("hget", key,"url")
+	url, err := redis_conn.Do("hget", key, "url")
 	failOnError(err, "Failed to query Redis")
-	loop, err := redis_conn.Do("hget", key,"looptime")
+	loop, err := redis_conn.Do("hget", key, "looptime")
 	failOnError(err, "Failed to query Redis")
-	redis_cont, err := redis_conn.Do("hget", key,"connectTimeout")
+	redis_cont, err := redis_conn.Do("hget", key, "connectTimeout")
 	failOnError(err, "Failed to query Redis")
-	redis_resp, err := redis_conn.Do("hget", key,"responseTimeout")
+	redis_resp, err := redis_conn.Do("hget", key, "responseTimeout")
 	failOnError(err, "Failed to query Redis")
-	redis_delay, err := redis_conn.Do("hget",key, "startDelay")
+	redis_delay, err := redis_conn.Do("hget", key, "startDelay")
 	failOnError(err, "Failed to query Redis")
 	concurrent, err := redis_conn.Do("hget", key, "concurrent")
 	failOnError(err, "Failed to query Redis")
@@ -249,7 +248,7 @@ func main() {
 	data, err := json.Marshal(tmpdata)
 	failOnError(err, "Failed to Marshal map-data")
 
-	data_count, err := redis_conn.Do("get", fmt.Sprintf("dataCount-%v",missionid))
+	data_count, err := redis_conn.Do("get", fmt.Sprintf("dataCount-%v", missionid))
 	failOnError(err, "Failed to query Redis")
 	if data_count == nil {
 		dataCount = 1
@@ -261,22 +260,47 @@ func main() {
 	dataGenerator = ring.New(dataCount)
 	s_data := string(data)
 
-	for i := 0; i < dataCount; i++ {
-		if strings.Contains(s_data, "{{file[") {
-			indexdata, err := redis_conn.Do("lindex", fmt.Sprintf("filedata-%v",missionid), i)
+	reg_file := regexp.MustCompile(`{{ *file\[(\d+)\] *}}`)
+
+	len_ranint := len(reg_file.FindAllString(s_data, -1))
+
+	if len_ranint > 0{
+		for i := 0; i < dataCount; i++ {
+			matchlist := reg_file.FindStringSubmatch(s_data)
+			
+			indexdata, err := redis_conn.Do("lindex", fmt.Sprintf("filedata-%v", missionid), i)
 			failOnError(err, "Failed to query Redis")
 			values := strings.Split(string(indexdata.([]byte)), " ")
 			r_data := s_data
 			for k, v := range values {
-				r_data = strings.Replace(r_data, fmt.Sprintf("{{file[%v]}}", k), v, -1)
+				undermatch := strings.Replace(matchlist[0], matchlist[1], fmt.Sprintf("%v", k), -1)
+				r_data = strings.Replace(r_data, undermatch, v, -1)
 			}
 			dataGenerator.Value = r_data
 			dataGenerator = dataGenerator.Next()
-		} else {
-			dataGenerator.Value = s_data
-			dataGenerator = dataGenerator.Next()
 		}
+	}else{
+		dataGenerator.Value = s_data
+		dataGenerator = dataGenerator.Next()
 	}
+
+
+	// for i := 0; i < dataCount; i++ {
+	// 	if strings.Contains(s_data, "{{file[") {
+	// 		indexdata, err := redis_conn.Do("lindex", fmt.Sprintf("filedata-%v", missionid), i)
+	// 		failOnError(err, "Failed to query Redis")
+	// 		values := strings.Split(string(indexdata.([]byte)), " ")
+	// 		r_data := s_data
+	// 		for k, v := range values {
+	// 			r_data = strings.Replace(r_data, fmt.Sprintf("{{file[%v]}}", k), v, -1)
+	// 		}
+	// 		dataGenerator.Value = r_data
+	// 		dataGenerator = dataGenerator.Next()
+	// 	} else {
+	// 		dataGenerator.Value = s_data
+	// 		dataGenerator = dataGenerator.Next()
+	// 	}
+	// }
 
 	if redis_delay == nil {
 		conc_delay = float64(0)
@@ -324,7 +348,6 @@ func main() {
 	//连接超时设置
 	client.Timeout = conn_timeout * time.Second
 
-
 	_, err = redis_conn.Do("hset", key, "status", 1)
 	failOnError(err, "Failed to set Redis status to 1")
 
@@ -339,7 +362,7 @@ func main() {
 			break
 		}
 
-		redis_status, err := redis_conn.Do("get", fmt.Sprintf("status-%v",missionid))
+		redis_status, err := redis_conn.Do("get", fmt.Sprintf("status-%v", missionid))
 		failOnError(err, "Failed to query Redis")
 
 		if redis_status == nil {

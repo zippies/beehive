@@ -5,9 +5,10 @@ from .queenBee import QueenBee,StatusController
 from multiprocessing import Manager
 from . import url
 from config import Config
-import json,time
+import json,time,redis
 
 statusController = StatusController()
+config = Config()
 
 @url.route("/")
 @url.route("/missions")
@@ -35,7 +36,7 @@ def newMission():
 
             info["missionid"] = mission.id
             fakemachines = mission.fakeMachines
-            queenbee = QueenBee(mission.id,fakemachines,Config(),statusController,request.form,request.files["file"])
+            queenbee = QueenBee(mission.id,fakemachines,config,statusController,request.form,request.files["file"])
             queenbee.start()
 
         except Exception as e:
@@ -45,10 +46,24 @@ def newMission():
             return jsonify(info)
     return render_template("newMission.html",choiced="newMission",timenow=timenow)
 
+@url.route("/stopmission/<int:id>",methods=["POST"])
+def stopMission(id):
+    try:
+        mission = Mission.query.filter_by(id=id).first()
+        if mission:
+            r = redis.Redis(config.redis_host,config.redis_port,config.redis_db)
+            r.set("status-%s" %id,"-1")
+    except Exception as e:
+        info["result"] = False
+        info["errorMsg"] = str(e)
+    finally:
+        return jsonify(info)
+
+
 @url.route("/getMissionStatus/<int:id>")
 def getMissionStatus(id):
     status = statusController.get(id)
-    print(status)
+    #print(status)
     # status = {
     #     "looptime":60,
     #     "progress":60,
