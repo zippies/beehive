@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from app import createApp,db
 from app.models import Machine
-from flask.ext.script import Manager,Shell
-from flask.ext.migrate import Migrate,MigrateCommand
+from flask_script import Manager,Shell
+from flask_migrate import Migrate,MigrateCommand
 from werkzeug.contrib.fixers import ProxyFix
 from config import Config
 import multiprocessing,platform
@@ -13,6 +13,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app)
 manager = Manager(app)
 migrate = Migrate(app,db)
 manager.add_command('db',MigrateCommand)
+
 
 @manager.command
 def dbinit():

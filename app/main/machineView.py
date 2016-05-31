@@ -117,26 +117,37 @@ def newMachine():
     user = request.form.get("user")
     password = request.form.get("password")
     sshtype = request.form.get("sshtype")
-    port = request.form.get("port") or 22
+    port = int(request.form.get("port")) or 22
 
     try:
-        # ssh = paramiko.SSHClient()
-        # ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        # if sshtype == "password":
-        #     ssh.connect(hostname=ip,port=port,username=user,password=password)
-        # elif sshtype == "publickey":
-        #     ssh.connect(hostname=ip,port=port,username=user,pkey=rsacontent)
-        # else:
-        #     info = {"result":False,"errorMsg":"unsupport sshtype"}
-        #     return jsonify(info)
-        #
-        # stdin,stdout,stderr = ssh.exec_command("whoami")
-        #
-        # if user not in stdout.readlines():
-        #     info = {"result":False,"errorMsg":stderr}
-        #     return jsonify(info)
-        # else:
-        #     ssh.close()
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        if sshtype == "password":
+            ssh.connect(hostname=ip,port=port,username=user,password=password)
+        elif sshtype == "publickey":
+            ssh.connect(hostname=ip,port=port,username=user,pkey=rsacontent)
+        else:
+            info["result"] = False
+            info["errorMsg"] = "unsupport sshtype"
+            return jsonify(info)
+        
+        stdin,stdout,stderr = ssh.exec_command("whoami")
+        if user != stdout.readline().strip():
+            info["result"] = False
+            info["errorMsg"] = stderr.read().decode()
+            return jsonify(info)
+
+
+        cmd_disk = "df -m"
+        stdin,stdout,stderr = ssh.exec_command(cmd_disk)
+
+        disk = [i.strip() for i in stdout.readlines()[1].split(" ") if i.strip()][1]
+
+        cmd_mem = "free -m"
+        stdin,stdout,stderr = ssh.exec_command(cmd_mem)
+        m = [i.strip() for i in stdout.readlines()[1].split(" ") if i.strip()][1]
+
+        ssh.close()
 
         machine = Machine(
             request.form.get("name"),
@@ -146,7 +157,10 @@ def newMachine():
             user=user,
             port=port,
             password=password,
-            rsa=rsacontent
+            rsa=rsacontent,
+            memory="%sM" %m,
+            cpu=1,
+            disk="%sM" %disk
         )
         db.session.add(machine)
         db.session.commit()

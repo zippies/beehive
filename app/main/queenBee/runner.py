@@ -7,34 +7,16 @@ system = platform.system().lower()
 
 class StatusController(object):
 
-    def __init__(self):
-        if system == "windows":
-            data = {}
-            self.filename = "statusController"
-            pickle.dump(data,open("%s.pkl" %filename,"wb"))
-        else:
-            self.data = Manager().dict()
+    def __init__(self,redis_conn):
+        self.redis_conn = redis_conn
 
     def get(self,key):
-        if system == "windows":
-            data = pickle.load(open("%s.pkl" %self.filename,"rb"))
-            if key in data.keys():
-                return data[key]
-            else:
-                return None
-        else:
-            return self.data.get(key,None)
+        data = self.redis_conn.hget("progress",key).decode()
+        return eval(data)
 
     def set(self,key,value):
-        if system == "windows":
-            data = pickle.load(open("%s.pkl" %self.filename,"rb"))
-            data[key] = value
-            pickle.dump(data, open("%s.pkl" %self.filename, "wb"))
-            return True
-        else:
-            self.data[key] = value
-            return True
-
+        self.redis_conn.hset("progress",key,value)
+        return True
 
 class QueenBee(Thread):
     def __init__(self,id,machines,config,statusController,form,file):
@@ -65,9 +47,6 @@ class QueenBee(Thread):
         self.looptime = 0
         self.end = False
 
-
-        self.serverSideErrors = Queue()
-        self.assertionErrorList = Manager().list()
         self.connectionTimeouts = 0
         self.responseTimeouts = 0
         self.unknownErrors = 0
@@ -92,6 +71,7 @@ class QueenBee(Thread):
     def dispatchClient(self,machine):
         if machine.ip == self.config.localip:
             self.hasLocal = True
+            print("dispatch local ok")
             return
         ssh = paramiko.SSHClient()
         ssh.load_system_host_keys()
@@ -118,33 +98,8 @@ class QueenBee(Thread):
 
 
     def run(self):
-        """
-        ('url', 'http://121.43.101.211:8180/suime-user/student/login'),     # url
-        ('type', 'POST'),                                                   # 请求类型
-        ('requestbody', '{"cellphone":18516042356,"password":"6547436690a26a399603a7096e876a2d"}'),  #请求参数body
-        ('requestheader', '{"hello":"chris"}'),                             # 请求header
-        ('concurrent', '10'),                                               # 并发量
-        ('looptime', '120'),                                                # 循环时间
-        ('startDelay', ''),                                                 # 启动延迟
-        ('looptimeOptions', '0'),                                           # 延迟类型：秒，分，时
-        ('choicedMachine', '1'),                                            # 已选择的机器数
-        ('missionName', 'Mission_2016-05-18 16:03:26'),                     # 任务名称
-        ('checkbox-file', '1'),                                             # 请求body包含file
-        ('checkbox-data', '1'),                                             # 请求body包含data
-
-        ('lengthValue-body', '250'),                                        # assert 返回body的长度（字节）
-        ('equalValue-header', ''),                                          # assert 返回header是否等于该值
-        ('responseTimeout', '10'),                                          # assert 响应超时（秒）
-        ('lengthValue-header', ''),                                         # assert 返回header的长度（字节）
-        ('containValue-body', ''),                                          # assert 返回body是否包含该值
-        ('connectTimeout', '5'),                                            # assert 连接超时（秒）
-        ('equalValue-body', '{"result":1}'),                                # assert 返回body是否等于该值
-        ('containValue-header', ''),                                        # assert 返回header是否包含该值
-        ('lengthRadioOptions-body', '0')                                    # assert 返回body长度比较类型（大于/等于/小于）
-        ('lengthRadioOptions-header', '0')                                  # assert 返回header长度比较类型（大于/等于/小于）
-        """
         ############################################解析mission配置######################################################
-        self.statusController.set(self.id,{"progress":1,"initialstate":"解析mission配置"})
+        self.statusController.set(self.id,{"p":1,"i":"解析mission配置","s":0})
 
         data = self.form.get("requestbody") or {}
         header = self.form.get("requestheader") or {}
@@ -169,9 +124,8 @@ class QueenBee(Thread):
         else:
             beecount = int(concurrent/2) or 1
 
-
         ############################################初始化redis######################################################
-        self.statusController.set(self.id, {"progress": 2, "initialstate": "初始化redis参数"})
+        self.statusController.set(self.id, {"p": 2, "i": "初始化redis参数","s":0})
 
         self.redisclient = redis.Redis(host=self.config.redis_host,port=self.config.redis_port,db=self.config.redis_db)
         conc_avg,conc_left = int(concurrent / len(self.machines)),concurrent%len(self.machines)
@@ -202,7 +156,7 @@ class QueenBee(Thread):
             pass
 
         ##############################################连接远程机器####################################################
-        self.statusController.set(self.id, {"progress": 3, "initialstate": "连接远程机器/下发压测程序"})
+        self.statusController.set(self.id, {"p": 3, "i": "连接远程机器/下发压测程序","s":0})
 
         dispatchers = []
         for machine in self.machines:
@@ -217,22 +171,22 @@ class QueenBee(Thread):
             dispatcher.join()
 
         #############################################启动压测客户端并收集压测数据####################################################
-        self.statusController.set(self.id, {"progress": 4, "initialstate": "启动压测客户端"})
+        self.statusController.set(self.id, {"p": 4, "i": "启动压测客户端","s":0})
 
         maleBees = []
         for sshclient in self.sshclients:
             bee = Thread(target=self.hitHoney,args=(sshclient,))
-            bee.setDaemon(True)
             maleBees.append(bee)
 
         for bee in maleBees:
             bee.start()
 
+
         localBee = None
         if self.hasLocal:
             localBee = Thread(target=self.hitHoney)
-            localBee.setDaemon(True)
             localBee.start()
+
 
         femaleBees = []
         for i in range(beecount):
@@ -247,11 +201,14 @@ class QueenBee(Thread):
             bee.start()
 
         if self.clientReady():
+            print("client ready")
             self.redisclient.set("status-%s" %self.id,1)
             self.starttime = time.time()
-            self.statusController.set(self.id, {"looptime":self.looptime,"progress": 1, "status":"running","initialstate": "开始压测"})
+            self.statusController.set(self.id, {"l":self.looptime,"p": 1, "s":1,"i": "开始压测"})
         else:
-            assert 1==2,"start client failed"
+            #assert 1==2,"start client failed"
+            self.statusController.set(self.id,{"s":-1,"i":"client not ready after 10 seconds"})
+            return
 
         print("mission real started")
 
@@ -260,14 +217,16 @@ class QueenBee(Thread):
         backend.setDaemon(True)
         backend.start()
 
+
         for bee in maleBees:
             bee.join()
+
 
         if self.hasLocal:
             localBee.join()
 
         print("Mission finished and bees on the way home")
-        self.statusController.set(self.id, {"looptime":self.looptime,"progress": self.looptime, "status":"running","initialstate": "开始压测"})
+        self.statusController.set(self.id, {"l":self.looptime,"p": self.looptime, "s":1,"i": "开始压测"})
 
         while True:
             if self.honeyCount and self.honeyCount == self.samples:
@@ -289,6 +248,7 @@ class QueenBee(Thread):
         count = 0
         total = len(self.machines)
         start = time.time()
+
         while time.time()-start < 10:
             for machine in self.machines:
                 key = "%s.%s" %(self.id,machine.ip)
@@ -309,69 +269,13 @@ class QueenBee(Thread):
         cmd = "./clienthive %s:4150 %s:%s %s" %(self.config.nsq_host,self.config.redis_host,self.config.redis_port,self.id)
         if not sshClient:
             stdout = os.popen(cmd)
-            print("local ready")
+            print("local clienthive startted")
             output = stdout.read()
         else:
             stdin,stdout,stderr = sshClient.exec_command(cmd)
-            print("one remote ready")
+            print("one remote clienthive startted")
             output = stdout.read()
 
-    def collectGoodHoney(self,honeyid):
-        """
-        type Report struct {
-            Url           string
-            Method        string
-            Elapsed       float64
-            Machine_ip    string
-            Goroutine_id  int
-            ErrorMsg      string
-            StatusCode    int
-            Body          string
-            ContentLength int
-            Header        http.Header
-            Cookies       []*http.Cookie
-        }
-
-        ####  check options
-        bodylengthtype = self.form.get("lengthRadioOptions-body")
-        bodylength = self.form.get("lengthValue-body")
-        headerlengthtype = self.form.get("lengthRadioOptions-header")
-        headerlength = self.form.get("lengthValue-header")
-        bodyequal = self.form.get("equalValue-body")
-        headerequal = self.form.get("equalValue-header")
-        bodyusereg = self.form.get("useRegx-body")
-        headerusereg = self.form.get("useRegx-header")
-        bodycontain = self.form.get("containValue-body")
-        headercontain = self.form.get("containValue-header")
-        """
-        bee = gnsq.Reader("success-%s" %self.id,"goodBee","%s:4150" %self.config.nsq_host)
-        self.analysisBees.append(bee)
-
-        @bee.on_message.connect
-        def handler(bee, message):
-            self.samples += 1
-            checkpass = True
-            messagebody = message.body.decode()
-            m = json.loads(messagebody)
-
-            self.totalelapsed += m["Elapsed"]
-
-            if not self.min_elapsed or m["Elapsed"] < self.min_elapsed:
-                self.min_elapsed = m["Elapsed"]
-
-            if not self.max_elapsed or m["Elapsed"] > self.max_elapsed:
-                self.max_elapsed = m["Elapsed"]
-
-            checkpass,errorMsg = self.checkResult(m)
-            if not checkpass:
-                self.assertionErrors += 1
-                self.assertionErrorList.append(errorMsg)
-                if not self.errorSample:
-                    self.errorSample = messagebody
-            elif not self.successSample:
-                self.successSample = messagebody
-
-        bee.start()
 
     def checkResult(self,response):
         if self.checkobj.bodyequal and self.checkobj.bodyequal != response["Body"]:
@@ -420,6 +324,50 @@ class QueenBee(Thread):
 
         return True,None
 
+    def collectGoodHoney(self,honeyid):
+        """
+        type Report struct {
+            Url           string
+            Method        string
+            Elapsed       float64
+            Machine_ip    string
+            Goroutine_id  int
+            ErrorMsg      string
+            StatusCode    int
+            Body          string
+            ContentLength int
+            Header        http.Header
+            Cookies       []*http.Cookie
+        }
+        """
+        bee = gnsq.Reader("success-%s" %self.id,"goodBee","%s:4150" %self.config.nsq_host)
+        self.analysisBees.append(bee)
+
+        @bee.on_message.connect
+        def handler(bee, message):
+            self.samples += 1
+            checkpass = True
+            messagebody = message.body.decode()
+            m = json.loads(messagebody)
+
+            self.totalelapsed += m["Elapsed"]
+
+            if not self.min_elapsed or m["Elapsed"] < self.min_elapsed:
+                self.min_elapsed = m["Elapsed"]
+
+            if not self.max_elapsed or m["Elapsed"] > self.max_elapsed:
+                self.max_elapsed = m["Elapsed"]
+
+            checkpass,errorMsg = self.checkResult(m)
+            if not checkpass:
+                self.assertionErrors += 1
+                self.redisclient.lpush("assertionError-%s"%self.id,errorMsg)
+
+            self.redisclient.lpush("%s.elapsed" %self.id,m["Elapsed"])
+
+        bee.start()
+
+
     def collectBadHoney(self,honeyid):
         bee = gnsq.Reader("failed-%s" %self.id,"badBee","%s:4150" %self.config.nsq_host)
         self.analysisBees.append(bee)
@@ -430,19 +378,23 @@ class QueenBee(Thread):
 
             m = message.body.decode()
 
+            etype = None
+
             re_conn = re.search(r"Client\.Timeout",m)
             re_resp = re.search(r"net\/http\: timeout",m)
 
             if re_conn:
                 self.connectionTimeouts += 1
+                etype = "connectTimeout"
             elif re_resp:
                 self.responseTimeouts += 1
+                etype = "responseTimeout"
             else:
                 self.unknownErrors += 1
-                self.serverSideErrors.put(m)
+                etype = "unknownError"
 
-            if not self.errorSample:
-                self.errorSample = m
+            #Error分类，存错误信息
+            self.redisclient.lpush("%s.%s"%(self.id,etype),m)
 
         bee.start()
 
@@ -470,28 +422,29 @@ class QueenBee(Thread):
         throught = (self.samples-self.errors) / (elapsed if elapsed < self.looptime else self.looptime)
 
         return {
-        "progress":int(elapsed) if elapsed < self.looptime else self.looptime,
-        "elapsed":int(elapsed) if elapsed < self.looptime else self.looptime,
-        "status":"finish" if self.end else "running",
-        "looptime":self.looptime,
-        "samples":self.samples,
-        "min_elapsed":round(self.min_elapsed,3),
-        "max_elapsed":round(self.max_elapsed,3),
-        "avg_elapsed":round(avg_elapsed,3),
-        "throught":round(throught,2),
-        "errors":self.errors+self.assertionErrors,
-        "error_distribute":"connTimeout:%s respTimeout:%s serverError:%s assertFailed:%s" %(self.connectionTimeouts,self.responseTimeouts,self.unknownErrors,self.assertionErrors),
-        "error_percent":round(error_percent,2),
-        "success_sample":self.successSample if self.end else "",
-        "error_sample":self.errorSample if self.end else ""
+        "p":int(elapsed) if elapsed < self.looptime else self.looptime,#progress
+        "e":int(elapsed) if elapsed < self.looptime else self.looptime,#elapsed
+        "s":2 if self.end else 1,#status
+        "l":self.looptime,#looptime
+        "sas":self.samples,#samples
+        "min_e":round(self.min_elapsed,3),#min_elapsed
+        "max_e":round(self.max_elapsed,3),#max_elapsed
+        "avg_e":round(avg_elapsed,3),#average_elapsed
+        "toh":round(throught,2),#throught
+        "es":self.errors+self.assertionErrors,#errors
+        "e_c":self.connectionTimeouts,#error_connect
+        "e_r":self.responseTimeouts,#error_resp
+        "e_u":self.unknownErrors,#error_unknown
+        "e_a":self.assertionErrors,#error_assert
+        "e_p":round(error_percent,2)#error_percent
         }
 
     def dumpStatus(self):
         while not self.end:
             self.statusController.set(self.id,self.progress)
-            time.sleep(1)
-        else:
-            self.statusController.set(self.id,self.progress)
+            time.sleep(1.5)
+
+        self.statusController.set(self.id,self.progress)
 
 
 

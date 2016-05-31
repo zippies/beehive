@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
-from flask.ext.login import UserMixin
+from flask_login import UserMixin
 from . import db,login_manager
 from collections import namedtuple
 info = {"result":True,"errorMsg":None}
@@ -98,7 +98,7 @@ class Machine(db.Model):
     disk = db.Column(db.String(20))
     createdtime = db.Column(db.DateTime,default=datetime.now)
 
-    def __init__(self,name,ip=None,system=None,sshtype=None,user=None,port=None,password=None,rsa=None):
+    def __init__(self,name,ip=None,system=None,sshtype=None,user=None,port=None,password=None,rsa=None,memory=None,cpu=None,disk=None):
         self.name = name
         self.ip = ip
         self.system = system
@@ -107,6 +107,9 @@ class Machine(db.Model):
         self.port = port
         self.password = password
         self.rsa = rsa
+        self.memory = memory
+        self.cpu = cpu
+        self.disk = disk
 
     def __repr__(self):
         return "<Machine:%s>" % self.name
