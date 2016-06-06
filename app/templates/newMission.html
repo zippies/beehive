@@ -450,30 +450,30 @@
     function validateForm(){
         if(!$.trim($("#missionName").val())){
             $("#missionName").focus();
-            layer.msg("名称不能为空");
+            layer.msg("名称不能为空",{offset:"200px"});
             return false;
         }
 
         if(!$.trim($("#url").val())){
             $("#url").focus();
-            layer.msg("url不能为空");
+            layer.msg("url不能为空",{offset:"200px"});
             return false;
         }
 
         if(!$.trim($("#concurrent").val())){
             $("#concurrent").focus();
-            layer.msg("请输入并发量");
+            layer.msg("请输入并发量",{offset:"200px"});
             return false;
         }
 
         if(!$.trim($("#looptime").val())){
             $("#looptime").focus();
-            layer.msg("请输入持续时间");
+            layer.msg("请输入持续时间",{offset:"200px"});
             return false;
         }
 
         if(parseInt(sessionStorage.choicedMachine) == 0){
-            layer.msg("请选择执行机器")
+            layer.msg("请选择执行机器",{offset:"200px"})
             return false;
         }
 

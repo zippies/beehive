@@ -1,13 +1,150 @@
 {% extends "base.html" %}
 
 {% block title %}
-    missions
+    historys
 {% endblock %}
 
-{% block css %}
+{% block cssrc %}
     {{ super() }}
+{% endblock %}
+
+
+{% block container %}
+<div id="resultdiv" style="display:none;padding:10px">
+
+	<button type="button" onclick="$('#resultdiv').hide()" class="close pull-right"><span aria-hidden="true">&times;</span></button>
+	<div style="padding:30px">
+		<div>
+		    <table class="table table-striped">
+		        <thead>
+		            <tr>
+		                <th>label</th>
+		                <th>样本量</th>
+		                <th>最小响应时间</th>
+		                <th>最大响应时间</th>
+		                <th>平均响应时间</th>
+		                <th>吞吐量</th>
+		                <th>错误数</th>
+		                <th>错误百分比</th>
+		            </tr>
+		        </thead>
+		        <tbody>
+		            <tr>
+		                <td>总体</td>
+		                <td id="samples">0</td>
+		                <td id="min-time">0</td>
+		                <td id="max-time">0</td>
+		                <td id="avg-time">0</td>
+		                <td id="throught">0</td>
+		                <td id="errors">0</td>
+		                <td id="error-percent">0</td>
+		            </tr>
+		        </tbody>
+		    </table>
+		</div>
+
+		<div class="col-lg-12" style="height:400px">
+		    <div class="col-lg-6" id="errordiv" style="height:100%"></div>
+		    <div class="col-lg-6" id="elapsediv" style="height:100%"></div>
+		</div>
+	</div>
+</div>
+
+<div>
+	<table class="table table-hover">
+		<thead>
+			<th>missionID</th>
+			<th>missionName</th>
+			<th>URL</th>
+			<th>method</th>
+			<th>concurrent</th>
+			<th>looptime</th>
+			<th>looptimeType</th>
+			<th>createdTime</th>
+			<th>operation</th>
+		</thead>
+		<tbody id="list-tbody">
+			{% for mission in missions %}
+				<tr id="list-{{ mission.id }}">
+					<td>{{ mission.id }}</td>
+					<td>{{ mission.name }}</td>
+					<td>{{ mission.url }}</td>
+					<td>{{ mission.type }}</td>
+					<td>{{ mission.concurrent }}</td>
+					<td>{{ mission.looptime }}</td>
+					<td>{% if mission.looptimetype == 0 %}秒{% elif mission.looptimetype == 1%}分{% else %}时{% endif %}</td>
+					<td>{{ mission.createdtime }}</td>
+					<td><button data-toggle="modal" data-target=".bs-example-modal-lg" onclick="showReport({{ mission.id }})">查看报告</button></td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+</div>
+
 {% endblock %}
 
 {% block script %}
-    {{ super() }}
+{{ super() }}
+<script src="/static/js/echarts.common.min.js"></script>
+<script>
+
+	function showReport(id){
+		$("#list-tbody > tr").removeClass("success");
+		$("#list-"+id).addClass("success")
+		$("#resultdiv").show()
+		$("html,body").animate({scrollTop:$("#resultdiv").offset().top},1000)
+	    var errorChart = echarts.init(document.getElementById('errordiv'));
+	    var elapseChart = echarts.init(document.getElementById('elapsediv'));
+
+		$.ajax({
+			url:"/freshstatus/"+id,
+			type:"get",
+			async:true,
+			error:function(request){
+				layer.msg(request.status)
+			},
+			success:function(data){
+				resp = JSON.parse(data)
+                $("#elapsed").html(resp.e)
+                $("#looptime-state").html(resp.l)
+                $("#samples").html(resp.sas)
+                $("#min-time").html(resp.min_e)
+                $("#max-time").html(resp.max_e)
+                $("#avg-time").html(resp.avg_e)
+                $("#throught").html(resp.toh)
+                $("#errors").html(resp.es)
+                $("#error-percent").html(resp.e_p)
+                $("#error_conn").html(resp.e_c)
+                $("#error_resp").html(resp.e_r)
+                $("#error_unknown").html(resp.e_u)
+                $("#error_assert").html(resp.e_a)
+			}
+		})
+
+		$.ajax({
+			url:"/getErrorChart/"+id,
+			type:"get",
+			async:true,
+			error:function(request){
+				layer.msg(request.status)
+			},
+			success:function(data){
+				errorChart.setOption(data);
+			}
+		})
+
+		$.ajax({
+			url:"/getElapseChart/"+id,
+			type:"get",
+			async:true,
+			error:function(request){
+				layer.msg(request.status)
+			},
+			success:function(data){
+				elapseChart.setOption(data);
+			}
+		})
+
+	}
+</script>
 {% endblock %}

@@ -14,10 +14,12 @@ config = Config()
 redis_conn = redis.Redis(config.redis_host,config.redis_port,config.redis_db)
 statusController = StatusController(redis_conn)
 
+
 @url.route("/")
 @url.route("/missions")
 def missions():
-    return render_template("missions.html",choiced="missions")
+    missions = Mission.query.all()
+    return render_template("missions.html",choiced="missions",missions=missions[::-1])
 
 
 @url.route("/newmission",methods=["GET","POST"])
@@ -162,10 +164,10 @@ elapse_template = """
 def getErrorChart(id):
     progress = statusController.get(id)
     datas = [
-        ("connectionTimeout",progress["e_c"]),
-        ("responseTimeout",progress["e_r"]),
-        ("unknownError",progress["e_u"]),
-        ("assertionError",progress["e_a"])
+        ("connectionTimeout",progress.get("e_c",0)),
+        ("responseTimeout",progress.get("e_r",0)),
+        ("unknownError",progress.get("e_u",0)),
+        ("assertionError",progress.get("e_a",0))
     ]
 
     datalist = [{"value":data[1],"name":data[0]} for data in datas]
@@ -185,12 +187,12 @@ def getElapseChart(id):
     typelist,datalist = [],[]
     sortedElapseList = redis_conn.sort("%s.elapsed" %id)
     length = redis_conn.llen("%s.elapsed" %id)
-
-    for p in p_list:
-        index_count = int(length * p)
-        typename = "< %s 秒" %sortedElapseList[index_count-1].decode()[0:4]
-        typelist.append(typename)
-        datalist.append(index_count)
+    if length > 0:
+        for p in p_list:
+            index_count = int(length * p)
+            typename = "< %s 秒" %sortedElapseList[index_count-1].decode()[0:4]
+            typelist.append(typename)
+            datalist.append(index_count)
 
     option = eval(Template(elapse_template).render(
         title = "响应时间分布",

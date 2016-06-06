@@ -18,7 +18,7 @@ machine_template = """
     {% else %}
         <div class="col-lg-3 col-md-4 col-sm-2" id="machinediv_{{ machine.id }}" style="margin-bottom:10px">
     {% endif %}
-            <div class="machine" id="machinediv_{{ machine.id }}" style="border:1px solid #D9D9D9;border-radius:5px;padding:15px;{% if source == 1%}background-color:#87CEFF;{% endif %}font-family:'楷体';">
+            <div class="machine" id="machinediv_{{ machine.id }}" style="border:1px solid #D9D9D9;border-radius:5px;padding:15px;font-family:'楷体';">
                 <div style="text-align:center;margin-bottom:15px">
                     {% if machine.system == 'windows' %}
                         <img src="static/imgs/windows.png" alt="machine">
