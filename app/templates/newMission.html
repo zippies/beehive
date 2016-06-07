@@ -32,11 +32,12 @@
         <div>
             <div class="panel panel-info">
                 <div class="panel-heading">
-                    <span class="panelstyle">Step 02: Base Test Config</span>
+                    <span class="panelstyle">Step 02: Basic Test Config</span>
                 </div>
             </div>
             <div class="lineitem">
-                <UL class="list-inline">
+            <!-- start -->
+                <ul class="list-inline">
                     <li>Request Type:</li>
                     <li>
                         <select name="type" class="form-control">
@@ -49,7 +50,8 @@
                     <li>
                         <input id="url" name="url" class="form-control" style="width:800px" maxlength="120" type="text" placeholder="请求地址" value="http://121.43.101.211:8180/suime-user/student/login">
                     </li>
-                </UL>
+                    <li><a class="btn btn-default" href="javascript:;" onclick="testapi()">测试一下</a></li>
+                </ul>
                 <label>Request Settings</label>
                 <ul class="nav nav-tabs">
                     <li role="presentation" class="active"><a href="#requestbodypanel" aria-controls="requestbodypanel" role="tab" data-toggle="tab">body</a></li>
@@ -160,6 +162,7 @@
                     </div>
                     <!-- assert header end -->
                 </div>
+            <!-- end here-->
             </div>
         </div>
 
@@ -444,7 +447,47 @@
     }
 
 
+    function testapi(){
+        if(!$.trim($("#url").val())){
+            $("#url").focus();
+            layer.msg("url不能为空",{offset:"200px"});
+            return false;
+        }
+        layer.load(2,{offset:"400px"});
 
+        var formdata = new FormData($("#newmissionform")[0])
+
+        $.ajax({
+            url:"/testapi",
+            type:"POST",
+            data:formdata,
+            dataType:"JSON",
+            cache:false,
+            processData:false,
+            contentType:false,
+            error:function(request){
+                layer.msg(request.status)
+                layer.closeAll('loading');
+            },
+            success:function(data){
+                layer.closeAll('loading');
+                if(data.result){
+                    layer.open({
+                        type: 1,
+                        shadeClose: true,
+                        title:"测试结果",
+                        shade: false,
+                        maxmin: true, //开启最大化最小化按钮
+                        area: ['893px', '600px'],
+                        offset:"200px",
+                        content: data.message
+                    });
+                }else{
+                    layer.msg("运行失败:"+data.errorMsg,{offset:"200px"})
+                }
+            }
+        })
+    }
 
 
     function validateForm(){
