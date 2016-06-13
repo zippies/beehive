@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"os"
@@ -29,7 +30,7 @@ var dataGenerator *ring.Ring
 func countTime(redis_conn redis.Conn, missionid string) {
 	for {
 		time.Sleep(2 * 1e9)
-		status, err := redis_conn.Do("get", fmt.Sprintf("status-%v",missionid))
+		status, err := redis_conn.Do("get", fmt.Sprintf("%v_status", missionid))
 		failOnError(err, "Failed to query redis")
 		currentStatus, err := strconv.Atoi(string(status.([]byte)))
 		failOnError(err, "Failed to convert <status>String to Int ")
@@ -51,68 +52,6 @@ func getLocalIp() string {
 	failOnError(err, "Failed udp baidu.com:80")
 	defer conn.Close()
 	return strings.Split(conn.LocalAddr().String(), ":")[0]
-}
-
-type Report struct {
-	Url           string
-	Method        string
-	Elapsed       float64
-	Machine_ip    string
-	ErrorMsg      string
-	StatusCode    int
-	Body          string
-	ContentLength int
-	Header        http.Header
-	Cookies       []*http.Cookie
-}
-
-func sendResult(missionid string,
-	url string,
-	method string,
-	ip string,
-	worker *nsq.Producer,
-	resp *http.Response,
-	error error,
-	starttime time.Time,
-	endtime time.Time) {
-
-	var report Report
-	var topic string
-
-	if error != nil {
-		report.Method = method
-		report.Url = url
-		report.Elapsed = endtime.Sub(starttime).Seconds()
-		report.Machine_ip = ip
-		report.ErrorMsg = error.Error()
-		report.StatusCode = -1
-		topic = fmt.Sprintf("failed-%v", missionid)
-	} else {
-		report.Method = method
-		report.Url = url
-		report.StatusCode = resp.StatusCode
-		report.Elapsed = endtime.Sub(starttime).Seconds()
-		result, err := ioutil.ReadAll(resp.Body)
-		if result != nil {
-			report.Body = string(result)
-		} else {
-			report.Body = "body is null:" + err.Error()
-		}
-		report.ContentLength = len(result)
-		report.Header = resp.Header
-		report.Cookies = resp.Cookies()
-		report.Machine_ip = ip
-		topic = fmt.Sprintf("success-%v", missionid)
-		defer resp.Body.Close()
-	}
-
-	body, err := json.Marshal(&report)
-	failOnError(err, "Failed to Marshall")
-
-	err = worker.Publish(topic, []byte(body))
-	failOnError(err, "Failed to publish a message")
-
-	group_report.Done()
 }
 
 func randomInt(min int, max int) int {
@@ -158,31 +97,125 @@ func dealRandom(value interface{}) []byte {
 
 func startClient(
 	missionid string,
-	client *http.Client,
-	url string,
-	method string,
-	header map[string]string,
+	requests []Request,
 	looptime int,
 	worker *nsq.Producer,
 	ip string) {
 
 	for start := time.Now(); int(time.Now().Sub(start).Seconds()) < looptime; {
-		dataGenerator = dataGenerator.Next()
-		data := dealRandom(dataGenerator.Value)
-		req, e := http.NewRequest(method, url, bytes.NewReader(data))
-		failOnError(e, "Failed to newRequest")
-		for key, value := range header {
-			req.Header.Set(key, value)
+		for index, request := range requests {
+			var req *http.Request
+
+			dataGenerator = request.dataGenerator.Next()
+			data := dealRandom(dataGenerator.Value)
+
+			if request.filetype != 1 {
+				req, e := http.NewRequest(request.method, request.url, bytes.NewReader(data))
+				failOnError(e, "Failed to newRequest")
+				for key, value := range request.header {
+					req.Header.Set(key, value)
+				}
+			} else {
+				var dataobj map[string]string
+				body := new(bytes.Buffer)
+				w := multipart.NewWriter(body)
+				content_type := w.FormDataContentType()
+				e := json.Unmarshal(data, &dataobj)
+				failOnError(e, "Failed to Marshal data")
+				for key, value := range dataobj {
+					w.WriteField(key, value)
+				}
+				file, _ := w.CreateFormFile("filecontent", "1.docx")
+				file.Write(request.filecontent)
+				w.Close()
+				req, e := http.NewRequest(request.method, request.url, body)
+				failOnError(e, "Failed to newRequest")
+				req.Header.Set("Content-Type", content_type)
+			}
+			start_time := time.Now()
+			resp, err := request.client.Do(req)
+			end_time := time.Now()
+			requests[index].resp = resp
+			requests[index].err = err
+			requests[index].elapsed = end_time.Sub(start_time).Seconds()
 		}
-		start_time := time.Now()
-		resp, err := client.Do(req)
-		end_time := time.Now()
-
 		group_report.Add(1)
-		go sendResult(missionid, url, method, ip, worker, resp, err, start_time, end_time)
-
+		go sendResult(missionid, ip, worker, requests)
 	}
 	group_client.Done()
+}
+
+type Report struct {
+	Url           string
+	Method        string
+	Elapsed       float64
+	Machine_ip    string
+	ErrorMsg      string
+	StatusCode    int
+	Body          string
+	ContentLength int
+	Header        http.Header
+	Cookies       []*http.Cookie
+}
+
+func sendResult(missionid string,
+	ip string,
+	worker *nsq.Producer,
+	requests []Request) {
+
+	var reports []Report
+
+	topic := fmt.Sprintf("%v_success", missionid)
+
+	for _, request := range requests {
+		var report Report
+
+		if request.err != nil {
+			report.Method = request.method
+			report.Url = request.url
+			report.Elapsed = request.elapsed
+			report.Machine_ip = ip
+			report.ErrorMsg = request.err.Error()
+			report.StatusCode = -1
+			topic = fmt.Sprintf("%v_failed", missionid)
+		} else {
+			report.Method = request.method
+			report.Url = request.url
+			report.StatusCode = request.resp.StatusCode
+			report.Elapsed = request.elapsed
+			result, err := ioutil.ReadAll(request.resp.Body)
+			if result != nil {
+				report.Body = string(result)
+			} else {
+				report.Body = "body is null:" + err.Error()
+			}
+			report.ContentLength = len(result)
+			report.Header = request.resp.Header
+			report.Cookies = request.resp.Cookies()
+			report.Machine_ip = ip
+			defer request.resp.Body.Close()
+		}
+
+		reports = append(reports, report)
+	}
+	body, err := json.Marshal(&reports)
+	failOnError(err, "Failed to Marshall reports")
+	err = worker.Publish(topic, []byte(body))
+	failOnError(err, "Failed to publish a message")
+	group_report.Done()
+}
+
+type Request struct {
+	url           string
+	method        string
+	client        *http.Client
+	header        map[string]string
+	dataGenerator *ring.Ring
+	filetype      int
+	filecontent   []byte
+	resp          *http.Response
+	err           error
+	elapsed       float64
 }
 
 func main() {
@@ -190,148 +223,175 @@ func main() {
 	config.DialTimeout = 5 * 1e9
 	config.WriteTimeout = 60 * 1e9
 	config.HeartbeatInterval = 10 * 1e9
-
-	nsqd_addr, redis_addr, missionid := os.Args[1], os.Args[2], os.Args[3]
-	worker, err := nsq.NewProducer(nsqd_addr, config)
-	//worker, err := nsq.NewProducer("104.236.5.165:4150", config)
+	missionid := 10
+	//nsqd_addr, redis_addr, missionid := os.Args[1], os.Args[2], os.Args[3]
+	//worker, err := nsq.NewProducer(nsqd_addr, config)
+	worker, err := nsq.NewProducer("104.236.5.165:4150", config)
 	failOnError(err, "Failed to newProducer")
 
 	//connect to redis
-	//redis_conn, err := redis.Dial("tcp", "127.0.0.1:6379")
-	redis_conn, err := redis.Dial("tcp", redis_addr)
+	redis_conn, err := redis.Dial("tcp", "104.131.29.105:6379")
+	//redis_conn, err := redis.Dial("tcp", redis_addr)
 	failOnError(err, "Failed to connect to redis")
 	defer redis_conn.Close()
 
 	//获取本机ip
-	ip := getLocalIp()
-
-	key := fmt.Sprintf("%v.%v", missionid, ip)
+	//ip := getLocalIp()
+	ip := "198.199.76.200"
+	id_ip := fmt.Sprintf("%v_%v", missionid, ip)
 
 	//初始化并发量
 	var con int
 	var looptime int
-	var header map[string]string
-	var tmpdata map[string]interface{}
-	var conn_timeout, resp_timeout time.Duration
-	var conc_delay float64
-	var dataCount int
+	var start_delay float64
 
-	method, err := redis_conn.Do("hget", key, "method")
-	failOnError(err, "Failed to query Redis")
-	url, err := redis_conn.Do("hget", key, "url")
-	failOnError(err, "Failed to query Redis")
-	loop, err := redis_conn.Do("hget", key, "looptime")
-	failOnError(err, "Failed to query Redis")
-	redis_cont, err := redis_conn.Do("hget", key, "connectTimeout")
-	failOnError(err, "Failed to query Redis")
-	redis_resp, err := redis_conn.Do("hget", key, "responseTimeout")
-	failOnError(err, "Failed to query Redis")
-	redis_delay, err := redis_conn.Do("hget", key, "startDelay")
-	failOnError(err, "Failed to query Redis")
-	concurrent, err := redis_conn.Do("hget", key, "concurrent")
-	failOnError(err, "Failed to query Redis")
-	redis_header, err := redis_conn.Do("hget", key, "header")
-	failOnError(err, "Failed to query Redis")
-	redis_data, err := redis_conn.Do("hget", key, "data")
+	concurrent, err := redis_conn.Do("hget", id_ip, "concurrent")
 	failOnError(err, "Failed to query Redis")
 
-	if redis_header != nil {
-		err = json.Unmarshal(redis_header.([]byte), &header)
-		failOnError(err, "Failed to Unmarshal header")
-	}
-
-	if redis_data != nil {
-		err = json.Unmarshal(redis_data.([]byte), &tmpdata)
-		failOnError(err, "Failed to Unmarshal redis-data to map-data")
-	}
-
-	data, err := json.Marshal(tmpdata)
-	failOnError(err, "Failed to Marshal map-data")
-
-	data_count, err := redis_conn.Do("get", fmt.Sprintf("dataCount-%v", missionid))
+	redis_delay, err := redis_conn.Do("get", fmt.Sprintf("%v_startdelay", missionid))
 	failOnError(err, "Failed to query Redis")
-	if data_count == nil {
-		dataCount = 1
-	} else {
-		dataCount, err = strconv.Atoi(string(data_count.([]byte)))
-		failOnError(err, "Failed to parse dataCount<string> to int")
-	}
 
-	dataGenerator = ring.New(dataCount)
-	s_data := string(data)
+	redis_looptime, err := redis_conn.Do("get", fmt.Sprintf("%v_looptime", missionid))
+	failOnError(err, "Failed to query Redis")
 
-	reg_file := regexp.MustCompile(`{{ *file\[(\d+)\] *}}`)
-
-	len_ranint := len(reg_file.FindAllString(s_data, -1))
-
-	if len_ranint > 0{
-		for i := 0; i < dataCount; i++ {
-			matchlist := reg_file.FindStringSubmatch(s_data)
-
-			indexdata, err := redis_conn.Do("lindex", fmt.Sprintf("filedata-%v", missionid), i)
-			failOnError(err, "Failed to query Redis")
-			values := strings.Split(string(indexdata.([]byte)), " ")
-			r_data := s_data
-			for k, v := range values {
-				undermatch := strings.Replace(matchlist[0], matchlist[1], fmt.Sprintf("%v", k), -1)
-				r_data = strings.Replace(r_data, undermatch, v, -1)
-			}
-			dataGenerator.Value = r_data
-			dataGenerator = dataGenerator.Next()
-		}
-	}else{
-		dataGenerator.Value = s_data
-		dataGenerator = dataGenerator.Next()
-	}
+	//redis_status, err := redis_conn.Do("get", fmt.Sprintf("%v_status", missionid))
+	//failOnError(err, "Failed to query Redis")
 
 	if redis_delay == nil {
-		conc_delay = float64(0)
+		start_delay = float64(0)
 	} else {
 		t, _ := strconv.Atoi(string(redis_delay.([]byte)))
-		conc_delay = float64(t) * 1e9
-	}
-
-	if redis_cont == nil {
-		conn_timeout = time.Duration(5)
-	} else {
-		t, err := strconv.Atoi(string(redis_cont.([]byte)))
-		failOnError(err, "Failed to parse requestTimeout<string> to int")
-		conn_timeout = time.Duration(t)
-	}
-
-	if redis_resp == nil {
-		resp_timeout = time.Duration(10)
-	} else {
-		t, err := strconv.Atoi(string(redis_resp.([]byte)))
-		failOnError(err, "Failed to parse responseTimeout<string> to int")
-		resp_timeout = time.Duration(t)
+		start_delay = float64(t) * 1e9
 	}
 
 	con, err = strconv.Atoi(string(concurrent.([]byte)))
 	failOnError(err, "Failed to parse concurrent<string> to int")
-	fmt.Println("concurrent:", con)
 
-	looptime, err = strconv.Atoi(string(loop.([]byte)))
+	looptime, err = strconv.Atoi(string(redis_looptime.([]byte)))
 	failOnError(err, "Failed to parse looptime<string> to int")
 
-	//初始化http.client
-	client := &http.Client{
-		Transport: &http.Transport{
-			Dial: func(netw, addr string) (net.Conn, error) {
-				conn, err := net.DialTimeout(netw, addr, time.Second*conn_timeout)
-				if err != nil {
-					return nil, err
-				}
-				return conn, nil
-			},
-			ResponseHeaderTimeout: time.Second * resp_timeout,
-		},
-	}
-	//连接超时设置
-	client.Timeout = conn_timeout * time.Second
+	redis_apicount, err := redis_conn.Do("llen", fmt.Sprintf("%v_urls", missionid))
+	failOnError(err, "Failed to query Redis")
 
-	_, err = redis_conn.Do("hset", key, "status", 1)
-	failOnError(err, "Failed to set Redis status to 1")
+	apicount, ok := redis_apicount.(int64)
+	if !ok {
+		fmt.Println("Failed to parse redis_apicount<interface> to int64")
+	}
+
+	requests := []Request{}
+
+	for i := 0; i < int(apicount); i++ {
+		var request Request
+		var header map[string]string
+		var tmpdata map[string]interface{}
+
+		url, err := redis_conn.Do("lindex", fmt.Sprintf("%v_urls", missionid), i)
+		failOnError(err, "Failed to query Redis")
+		method, err := redis_conn.Do("lindex", fmt.Sprintf("%v_methods", missionid), i)
+		failOnError(err, "Failed to query Redis")
+		resptimeout, err := redis_conn.Do("lindex", fmt.Sprintf("%v_resptimeouts", missionid), i)
+		failOnError(err, "Failed to query Redis")
+		conntimeout, err := redis_conn.Do("lindex", fmt.Sprintf("%v_conntimeouts", missionid), i)
+		failOnError(err, "Failed to query Redis")
+		redis_header, err := redis_conn.Do("lindex", fmt.Sprintf("%v_headers", missionid), i)
+		failOnError(err, "Failed to query Redis")
+		redis_data, err := redis_conn.Do("lindex", fmt.Sprintf("%v_datas", missionid), i)
+		failOnError(err, "Failed to query Redis")
+		redis_filetype, err := redis_conn.Do("lindex", fmt.Sprintf("%v_filetypes", missionid), i)
+		failOnError(err, "Failed to query Redis")
+
+		request.url = string(url.([]byte))
+		request.method = string(method.([]byte))
+
+		filetype, err := strconv.Atoi(string(redis_filetype.([]byte)))
+		failOnError(err, "Failed to parse redis_filetype<string> to int")
+		conn_timeout, err := strconv.Atoi(string(conntimeout.([]byte)))
+		failOnError(err, "Failed to parse conntimeout<string> to int")
+		resp_timeout, err := strconv.Atoi(string(resptimeout.([]byte)))
+		failOnError(err, "Failed to parse resptimeout<string> to int")
+
+		if redis_header != nil {
+			err = json.Unmarshal(redis_header.([]byte), &header)
+			failOnError(err, "Failed to Unmarshal header")
+		}
+
+		request.header = header
+
+		if redis_data != nil {
+			err = json.Unmarshal(redis_data.([]byte), &tmpdata)
+			failOnError(err, "Failed to Unmarshal redis-data to map-data")
+		}
+
+		request.filetype = filetype
+
+		data, err := json.Marshal(tmpdata)
+		var dataCount int
+		switch filetype {
+		case 0:
+			dataCount = 1
+		case 1:
+			dataCount = 1
+			redis_filecontent, err := redis_conn.Do("get", fmt.Sprintf("%v_file_%v", missionid, i))
+			failOnError(err, "Failed to query Redis filecontent")
+			request.filecontent = redis_filecontent.([]byte)
+		case 2:
+			redis_datacount, err := redis_conn.Do("get", fmt.Sprintf("%v_datacount_%v", missionid, i))
+			failOnError(err, "Failed to query Redis")
+			dataCount, err = strconv.Atoi(string(redis_datacount.([]byte)))
+			failOnError(err, "Failed to parse redis_datacount<string> to int")
+		}
+
+		dataGenerator = ring.New(dataCount)
+		s_data := string(data)
+
+		reg_file := regexp.MustCompile(`{{ *file\[(\d+)\] *}}`)
+
+		len_ranint := len(reg_file.FindAllString(s_data, -1))
+
+		if len_ranint > 0 {
+			for i := 0; i < dataCount; i++ {
+				matchlist := reg_file.FindStringSubmatch(s_data)
+
+				indexdata, err := redis_conn.Do("lindex", fmt.Sprintf("filedata-%v", missionid), i)
+				failOnError(err, "Failed to query Redis")
+				values := strings.Split(string(indexdata.([]byte)), " ")
+				r_data := s_data
+				for k, v := range values {
+					undermatch := strings.Replace(matchlist[0], matchlist[1], fmt.Sprintf("%v", k), -1)
+					r_data = strings.Replace(r_data, undermatch, v, -1)
+				}
+				dataGenerator.Value = r_data
+				dataGenerator = dataGenerator.Next()
+			}
+		} else {
+			dataGenerator.Value = s_data
+			dataGenerator = dataGenerator.Next()
+		}
+
+		request.dataGenerator = dataGenerator
+
+		//初始化http.client
+		client := &http.Client{
+			Transport: &http.Transport{
+				Dial: func(netw, addr string) (net.Conn, error) {
+					conn, err := net.DialTimeout(netw, addr, time.Second*time.Duration(conn_timeout))
+					if err != nil {
+						return nil, err
+					}
+					return conn, nil
+				},
+				ResponseHeaderTimeout: time.Second * time.Duration(resp_timeout),
+			},
+		}
+		//连接超时设置
+		client.Timeout = time.Duration(conn_timeout) * time.Second
+
+		request.client = client
+		requests = append(requests, request)
+	}
+
+	_, err = redis_conn.Do("hset", id_ip, "ready", 1)
+	failOnError(err, "Failed to set Redis ready to 1")
 
 	//记录运行时间
 	start := time.Now()
@@ -344,7 +404,7 @@ func main() {
 			break
 		}
 
-		redis_status, err := redis_conn.Do("get", fmt.Sprintf("status-%v", missionid))
+		redis_status, err := redis_conn.Do("get", fmt.Sprintf("%v_status", missionid))
 		failOnError(err, "Failed to query Redis")
 
 		if redis_status == nil {
@@ -357,10 +417,10 @@ func main() {
 			st := time.Now()
 			for i := 0; i < con; i++ {
 				group_client.Add(1)
-				time.Sleep(time.Duration(conc_delay/float64(con)) * time.Nanosecond)
-				go startClient(missionid, client, string(url.([]byte)), string(method.([]byte)), header, looptime, worker, ip)
+				time.Sleep(time.Duration(start_delay/float64(con)) * time.Nanosecond)
+				go startClient("10", requests, looptime, worker, ip)
 			}
-			go countTime(redis_conn, missionid)
+			go countTime(redis_conn, "10")
 			println("all clients startted ,looptime", looptime)
 
 			group_client.Wait()
@@ -373,7 +433,7 @@ func main() {
 
 			worker.Stop()
 
-			_, err = redis_conn.Do("hset", key, "status", 2)
+			_, err = redis_conn.Do("set", fmt.Sprintf("%v_status", missionid), 2)
 			failOnError(err, "Failed to set Redis status to 2")
 			break
 
