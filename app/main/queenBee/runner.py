@@ -19,20 +19,24 @@ class StatusController(object):
         return True
 
 class QueenBee(Thread):
-    def __init__(self,id,machines,config,statusController,form,file):
+    def __init__(self,id,apicount,machines,config,statusController,form,files):
         Thread.__init__(self)
         self.id = id
+        self.apicount = apicount
         self.machines = machines
         self.hasLocal = False
         self.config = config
         self.statusController = statusController
         self.form = form
-        self.checkobj = self._initCheckObj(form)
-        if file.filename:
-            self.datafile = "%s/%s" %(self.config.UPLOAD_FOLDER,file.filename)
-            file.save(self.datafile)
-        else:
-            self.datafile = None
+        #self.checkobj = self._initCheckObj(form)
+        self.files = []
+        for name,file in files.items():
+            if file.filename:
+                datafile = "%s/%s" %(self.config.UPLOAD_FOLDER,file.filename)
+                file.save(datafile)
+                self.files.append(datafile)
+            else:
+                self.files.append(None)
         self.redisclient = None
         self.sshclients = []
         self.samples = 0
@@ -52,19 +56,19 @@ class QueenBee(Thread):
         self.unknownErrors = 0
         self.assertionErrors = 0
 
-    def _initCheckObj(self,form):
+    def _initCheckObj(self,form,id):
         checkobj = namedtuple("checkobj","bodyequal headerequal bodycontains headercontains bodyusereg headerusereg bodylengthtype bodylength headerlengthtype headerlength")
         return checkobj(
-            self.form.get("equalValue-body"),
-            self.form.get("equalValue-header"),
-            self.form.get("containValue-body"),
-            self.form.get("containValue-header"),
-            self.form.get("useRegx-body"),
-            self.form.get("useRegx-header"),
-            self.form.get("lengthRadioOptions-body"),
-            int(self.form.get("lengthValue-body")) if self.form.get("lengthValue-body") else None,
-            self.form.get("lengthRadioOptions-header"),
-            int(self.form.get("lengthValue-header")) if self.form.get("lengthValue-header") else None
+            self.form.get("equalValue-body-%s" %id),
+            self.form.get("equalValue-header-%s" %id),
+            self.form.get("containValue-body-%s" %id),
+            self.form.get("containValue-header-%s" %id),
+            self.form.get("useRegx-body-%s" %id),
+            self.form.get("useRegx-header-%s" %id),
+            self.form.get("lengthRadioOptions-body-%s" %id),
+            int(self.form.get("lengthValue-body-%s" %id)) if self.form.get("lengthValue-body-%s" %id) else None,
+            self.form.get("lengthRadioOptions-header-%s" %id),
+            int(self.form.get("lengthValue-header-%s" %id)) if self.form.get("lengthValue-header-%s" %id) else None
         )
 
 
@@ -101,16 +105,9 @@ class QueenBee(Thread):
         ############################################解析mission配置######################################################
         self.statusController.set(self.id,{"p":1,"i":"解析mission配置","s":0})
 
-        data = self.form.get("requestbody") or {}
-        header = self.form.get("requestheader") or {}
         startDelay = self.form.get("startDelay")
-        connectTimeout = self.form.get("connectTimeout")
-        responseTimeout = self.form.get("responseTimeout")
         concurrent = int(self.form.get("concurrent"))
         beecount = self.form.get("beecount")
-
-        url = self.form.get("url")
-        method = self.form.get("type")
 
         if self.form.get("looptimeOptions") == "0":
             self.looptime = int(self.form.get("looptime"))
@@ -130,31 +127,42 @@ class QueenBee(Thread):
         self.redisclient = redis.Redis(host=self.config.redis_host,port=self.config.redis_port,db=self.config.redis_db)
         conc_avg,conc_left = int(concurrent / len(self.machines)),concurrent%len(self.machines)
         for index,machine in enumerate(self.machines):
-            key = "%s.%s" %(self.id,machine.ip)
-            self.redisclient.hmset(key,{"url":url,"responseTimeout":responseTimeout,"connectTimeout":connectTimeout,"startDelay":startDelay,"looptime":self.looptime,"method":method})
+            key = "%s_%s" %(self.id,machine.ip)
+            self.redisclient.hset(key,"ready",0)
 
             if index == 0:
                 self.redisclient.hset(key,"concurrent",conc_avg+conc_left)
             else:
                 self.redisclient.hset(key,"concurrent",conc_avg)
-            self.redisclient.hset(key,"header",header)
-            self.redisclient.hset(key,"data",data)
 
-        m = re.search(r"{{ *file\[\d+\] *}}",data)
+        self.redisclient.mset({"%s_startdelay" %self.id:startDelay,"%s_looptime" %self.id:self.looptime,"%s_status" %self.id:0})
+        for i in range(self.apicount):
+            data = self.form.get("requestbody-%s" %(i+1))
+            self.redisclient.lpush("%s_urls" %self.id,self.form.get("url-%s" %(i+1)))
+            self.redisclient.lpush("%s_methods" %self.id,self.form.get("type-%s" %(i+1)))
+            self.redisclient.lpush("%s_resptimeouts" %self.id,self.form.get("responseTimeout-%s" %(i+1)))
+            self.redisclient.lpush("%s_conntimeouts" %self.id,self.form.get("connectTimeout-%s" %(i+1)))
+            self.redisclient.lpush("%s_headers" %self.id,self.form.get("requestheader-%s" %(i+1)) or "{}")
+            self.redisclient.lpush("%s_datas" %self.id,data or "{}")
 
-        if m and self.datafile:
-            with open(self.datafile,encoding="utf-8") as f:
-                lines = [line.strip() for line in f.readlines() if line.strip()]
-                for line in lines:
-                    self.redisclient.lpush("filedata-%s" %self.id,line)
+            m = re.search(r"{{ *file\[\d+\] *}}",data)
 
-                self.redisclient.set("dataCount-%s" %self.id,len(lines))
-        elif self.datafile:
-            with open(self.datafile,"rb") as f:
-                self.redisclient.lpush("file-%s" %self.id,f.read())
-        else:
-            pass
+            if m and self.files[i]:
+                with open(self.files[i],encoding="utf-8") as f:
+                    lines = [line.strip() for line in f.readlines() if line.strip()]
+                    for line in lines:
+                        self.redisclient.lpush("%s_filedata_%s" %(self.id,i+1),line)
 
+                    self.redisclient.set("%s_datacounts" %(self.id,i+1),len(lines))
+                    self.redisclient.lpush("%s_filetypes" %self.id,2)
+            elif self.files[i]:
+                with open(self.files[i],"rb") as f:
+                    self.redisclient.set("%s_file_%s" %(self.id,i+1),f.read())
+                    self.redisclient.lpush("%s_filetypes" %self.id,1)
+            else:
+                self.redisclient.lpush("%s_filetypes" %self.id,0)
+
+        return
         ##############################################连接远程机器####################################################
         self.statusController.set(self.id, {"p": 3, "i": "连接远程机器/下发压测程序","s":0})
 
@@ -202,7 +210,7 @@ class QueenBee(Thread):
 
         if self.clientReady():
             print("client ready")
-            self.redisclient.set("status-%s" %self.id,1)
+            self.redisclient.set("%s_status" %self.id,1)
             self.starttime = time.time()
             self.statusController.set(self.id, {"l":self.looptime,"p": 1, "s":1,"i": "开始压测"})
         else:
@@ -251,8 +259,8 @@ class QueenBee(Thread):
 
         while time.time()-start < 10:
             for machine in self.machines:
-                key = "%s.%s" %(self.id,machine.ip)
-                status = self.redisclient.hget(key,"status")
+                key = "%s_%s" %(self.id,machine.ip)
+                status = self.redisclient.hget(key,"ready")
                 if status and int(status) == 1:
                     count += 1
 
@@ -361,9 +369,9 @@ class QueenBee(Thread):
             checkpass,errorMsg = self.checkResult(m)
             if not checkpass:
                 self.assertionErrors += 1
-                self.redisclient.lpush("assertionError-%s"%self.id,errorMsg)
+                self.redisclient.lpush("%s_assertionError"%self.id,errorMsg)
 
-            self.redisclient.lpush("%s.elapsed" %self.id,m["Elapsed"])
+            self.redisclient.lpush("%s_elapsed" %self.id,m["Elapsed"])
 
         bee.start()
 

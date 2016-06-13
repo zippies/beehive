@@ -42,17 +42,17 @@ login_manager.login_message = {"type":"error","message":"请登录后使用该�
 class Mission(db.Model):
     id = db.Column(db.Integer,primary_key=True)
     name = db.Column(db.String(32))
-    url = db.Column(db.String(256))
-    type = db.Column(db.Integer)
+    urls = db.Column(db.PickleType)
+    types = db.Column(db.PickleType)
     concurrent = db.Column(db.Integer)
     looptime = db.Column(db.Integer)
     looptimetype = db.Column(db.Integer)
     createdtime = db.Column(db.DateTime, default=datetime.now)
 
-    def __init__(self,name,url,type,machines,concurrent,looptime,looptimetype):
+    def __init__(self,name,urls,types,machines,concurrent,looptime,looptimetype):
         self.name = name.strip()
-        self.url = url.strip()
-        self.type = type
+        self.urls = urls
+        self.types = types
         self.machineids = [int(m) for m in machines]
         self.concurrent = concurrent
         self.looptime = int(looptime)

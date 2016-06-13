@@ -26,13 +26,20 @@ def missions():
 def newMission():
     timenow = time.strftime("%Y-%m-%d %H:%M:%S")
     if request.method == "POST":
+        #return jsonify(info)
         try:
-            choicedmachines = dict(request.form).get("choicedMachine")
+            dictform = dict(request.form)
+            apicount = len(dictform.get("apiitems"))
+            choicedmachines = dictform.get("choicedMachine")
             print("choicedmachine",choicedmachines)
+            urls,types = [],[]
+            for i in range(apicount):
+                urls.append(dictform.get("url-%s" %(i+1)))
+                types.append(dictform.get("type-%s" %(i+1)))
             mission = Mission(
                 request.form.get("missionName"),
-                request.form.get("url"),
-                request.form.get("type"),
+                urls,
+                types,
                 choicedmachines,
                 request.form.get("concurrent"),
                 request.form.get("looptime"),
@@ -43,7 +50,8 @@ def newMission():
 
             info["missionid"] = mission.id
             fakemachines = mission.fakeMachines
-            queenbee = QueenBee(mission.id,fakemachines,config,statusController,request.form,request.files["file"])
+            print(request.files)
+            queenbee = QueenBee(mission.id,apicount,fakemachines,config,statusController,request.form,request.files)
             queenbee.start()
             print("queenbee started")
             info["missionid"] = str(mission.id)
@@ -120,16 +128,16 @@ def stopMission(id):
         return jsonify(info)
 
 
-@url.route("/testapi",methods=["GET","POST"])
-def testApi():
+@url.route("/testapi/<apiid>",methods=["GET","POST"])
+def testApi(apiid):
     if request.method == "POST":
         form = request.form
-        method = form.get("type")
-        url = form.get("url")
-        body = form.get("requestbody",'{}') or '{}'
-        header = form.get("requestheader",'{}') or '{}'
-        conn_timeout = int(form.get("connectionTimeout",5))
-        resp_timeout = int(form.get("responseTimeout",10))
+        method = form.get("type-%s" %apiid)
+        url = form.get("url-%s" %apiid)
+        body = form.get("requestbody-%s" %apiid,'{}') or '{}'
+        header = form.get("requestheader-%s" %apiid,'{}') or '{}'
+        conn_timeout = int(form.get("connectionTimeout-%s" %apiid,5))
+        resp_timeout = int(form.get("responseTimeout-%s" %apiid,10))
 
         r = None
 
@@ -155,6 +163,149 @@ def testApi():
         )
 
         return jsonify(info)
+
+
+@url.route("/getapitemplate/<int:id>")
+def getApiTemplate(id):
+    apilist = Template(apilist_template).render(
+        id=id
+    )
+    return apilist
+
+
+
+apilist_template = """
+<div class="col-md-11 apilistitem" id="apilistDetail-{{id}}">
+    <input type="checkbox" name="apiitems" checked="checked" style="display:none"/>
+    <ul class="list-inline">
+        <li>Request Type:</li>
+        <li>
+            <select name="type-{{id}}" class="form-control">
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="DELETE">DELETE</option>
+            </select>
+        </li>
+        <li>
+            <input id="url-{{id}}" name="url-{{id}}" class="form-control" style="width:800px" maxlength="120" type="text" placeholder="请求地址" value="">
+        </li>
+        <li><a class="btn btn-default" href="javascript:;" onclick="testapi({{id}})">测试一下</a></li>
+        <li><a href="javascript:;" class="btn btn-danger" onclick="delapi({{id}})">删除</a></li>
+    </ul>
+    <label>Request Settings</label>
+    <ul class="nav nav-tabs">
+        <li role="presentation" class="active"><a href="#requestbodypanel-{{id}}" aria-controls="requestbodypanel-{{id}}" role="tab" data-toggle="tab">body</a></li>
+        <li role="presentation"><a href="#requestheaderpanel-{{id}}" aria-controls="requestheaderpanel-{{id}}" role="tab" data-toggle="tab">header</a></li>
+        <li role="presentation"><a href="#requestauthpanel-{{id}}" aria-controls="requestauthpanel-{{id}}" role="tab" data-toggle="tab">authorization</a></li>
+    </ul>
+    <div class="tab-content">
+        <!-- body begin -->
+        <div role="tabpanel" class="tab-pane active" id="requestbodypanel-{{id}}">
+            <div class="panel-body" id="req-body-panel-{{id}}">
+                <ul class="list-inline">
+                    <li><input type="file" name="file-{{id}}"></li>
+                </ul>
+                <textarea id="bodyarea-{{id}}" name="requestbody-{{id}}" class="form-control" style="height:100px"></textarea>
+            </div>
+        </div>
+        <!-- body end -->
+        <!-- header begin -->
+        <div role="tabpanel" class="tab-pane" id="requestheaderpanel-{{id}}">
+            <div class="panel-body" id="req-header-panel-{{id}}">
+                <textarea id="headerarea" name="requestheader-{{id}}" class="form-control"></textarea>
+            </div>
+        </div>
+        <!-- header ennd -->
+        <!-- auth begin -->
+        <div role="tabpanel" class="tab-pane" id="requestauthpanel-{{id}}">
+            <div class="panel-body" id="req-auth-panel">
+                no auth
+            </div>
+        </div>
+        <!-- auth end -->
+    </div>
+    <label>Assertions</label>
+    <ul class="nav nav-tabs">
+        <li role="presentation" class="active"><a href="#assertbodypanel-{{id}}" aria-controls="assertbodypanel-{{id}}" role="tab" data-toggle="tab">body</a></li>
+        <li role="presentation"><a href="#asserttimepanel-{{id}}" aria-controls="asserttimepanel-{{id}}" role="tab" data-toggle="tab">time</a></li>
+        <li role="presentation"><a href="#assertheaderpanel-{{id}}" aria-controls="assertheaderpanel-{{id}}" role="tab" data-toggle="tab">header</a></li>
+    </ul>
+    <div class="tab-content">
+        <div role="tabpanel" class="tab-pane active" id="assertbodypanel-{{id}}">
+            <div class="panel-body" id="assert-body-panel-{{id}}">
+                <div class="lineitem">
+                    equals:<input type="text" name="equalValue-body-{{id}}" style="width:90%">
+                </div>
+                <div class="lineitem">
+                    contains:
+                    <label class="checkbox-inline">
+                      <input type="checkbox" name="useRegx-body-{{id}}" value="1"> 正则匹配
+                    </label>
+                    <input type="text" name="containValue-body-{{id}}" style="width:85%">
+                </div>
+                <div class="lineitem">
+                    length:
+                    <label class="radio-inline">
+                      <input type="radio" name="lengthRadioOptions-body-{{id}}" value="0"> 小于
+                    </label>
+                    <label class="radio-inline">
+                      <input type="radio" name="lengthRadioOptions-body-{{id}}" value="1"> 等于
+                    </label>
+                    <label class="radio-inline">
+                      <input type="radio" name="lengthRadioOptions-body-{{id}}" value="2"> 大于
+                    </label>
+                    <input type="text" name="lengthValue-body" style="width:10%"> 字节
+                </div>
+            </div>
+        </div>
+        <div role="tabpanel" class="tab-pane" id="asserttimepanel-{{id}}">
+            <div class="panel-body" id="assert-time-panel-{{id}}">
+                <div class="lineitem">
+                    connect  timeout: <input type="text" name="connectTimeout-{{id}}" value="5"> 秒
+                </div>
+                <div class="lineitem">
+                    response timeout: <input type="text" name="responseTimeout-{{id}}" value="10"> 秒
+                </div>
+            </div>
+        </div>
+        <div role="tabpanel" class="tab-pane" id="assertheaderpanel-{{id}}">
+            <div class="panel-body" id="assert-header-panel-{{id}}">
+                <div class="lineitem">
+                    equals:<input type="text" name="equalValue-header-{{id}}" style="width:90%">
+                </div>
+                <div class="lineitem">
+                    contains:
+                    <label class="checkbox-inline">
+                      <input type="checkbox" name="useRegx-header-{{id}}" value="1"> 正则匹配
+                    </label>
+                    <input type="text" name="containValue-header-{{id}}" style="width:85%">
+                </div>
+                <div class="lineitem">
+                    length:
+                    <label class="radio-inline">
+                      <input type="radio" name="lengthRadioOptions-header-{{id}}" value="0"> 小于
+                    </label>
+                    <label class="radio-inline">
+                      <input type="radio" name="lengthRadioOptions-header-{{id}}" value="1"> 等于
+                    </label>
+                    <label class="radio-inline">
+                      <input type="radio" name="lengthRadioOptions-header-{{id}}" value="2"> 大于
+                    </label>
+                    <input type="text" name="lengthValue-header-{{id}}" style="width:10%"> 字节
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+"""
+
+
+
+
+
+
+
 
 result_template = """
 <div style="padding:20px">
