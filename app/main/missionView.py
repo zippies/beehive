@@ -67,7 +67,7 @@ def newMission():
 @url.route("/freshstatus/<int:id>")
 def freshStatus(id):
     progress = statusController.get(id) or {}
-    print(progress)
+    #print(progress)
     progress = json.dumps(progress)
     return progress
 
@@ -97,8 +97,8 @@ def getErrorChart(id):
 def getElapseChart(id):
     p_list = [0.75,0.8,0.85,0.9,0.95,1]
     typelist,datalist = [],[]
-    sortedElapseList = redis_conn.sort("%s.elapsed" %id)
-    length = redis_conn.llen("%s.elapsed" %id)
+    sortedElapseList = redis_conn.sort("%s_elapsed" %id)
+    length = redis_conn.llen("%s_elapsed" %id)
     if length > 0:
         for p in p_list:
             index_count = int(length * p)
@@ -140,26 +140,28 @@ def testApi(apiid):
         resp_timeout = int(form.get("responseTimeout-%s" %apiid,10))
 
         r = None
-
-        if method.lower() == "post":
-            r = requests.post(url=url,data=eval(body),headers=eval(header),timeout=(conn_timeout,resp_timeout))
-        elif method.lower() == "get":
-            r = requests.get(url=url,params=eval(body),headers=eval(header),timeout=(conn_timeout,resp_timeout))
-        elif method.lower() == "delete":
-            r = requests.delete(url=url)
-        elif method.lower() == "put":
-            r = requests.put(url=url,data=eval(body),headers=eval(header),timeout=(conn_timeout,resp_timeout))
-        else:
-            info["result"] = False
-            info["errorMsg"] = "unsupported method"
-
+        try:
+            if method.lower() == "post":
+                r = requests.post(url=url,data=eval(body),headers=eval(header),timeout=(conn_timeout,resp_timeout))
+            elif method.lower() == "get":
+                r = requests.get(url=url,params=eval(body),headers=eval(header),timeout=(conn_timeout,resp_timeout))
+            elif method.lower() == "delete":
+                r = requests.delete(url=url)
+            elif method.lower() == "put":
+                r = requests.put(url=url,data=eval(body),headers=eval(header),timeout=(conn_timeout,resp_timeout))
+            else:
+                info["result"] = False
+                info["errorMsg"] = "unsupported method"
+        except Exception as e:
+            r = "接口无返回"
         info["message"] = Template(result_template).render(
             url=url,
             method=method,
             req_body=body,
             req_header=header,
-            resp_body=r.text,
-            resp_header=r.headers
+            resp_code=r.status_code if not isinstance(r,str) else 2000,
+            resp_body=r.text if not isinstance(r,str) else r,
+            resp_header=r.headers if not isinstance(r,str) else r
         )
 
         return jsonify(info)
@@ -204,7 +206,19 @@ apilist_template = """
         <div role="tabpanel" class="tab-pane active" id="requestbodypanel-{{id}}">
             <div class="panel-body" id="req-body-panel-{{id}}">
                 <ul class="list-inline">
-                    <li><input type="file" name="file-{{id}}"></li>
+                    <li>上传文件类型：</li>
+                    <li>
+                        <label class="radio-inline">
+                          <input type="radio" name="radio-filetype-{{id}}" value="data" checked="checked" onclick="$('#filefield-{{id}}').hide()"> 请求数据
+                        </label>
+                    </li>
+                    <li>
+                        <label class="radio-inline">
+                          <input type="radio" name="radio-filetype-{{id}}" value="file" onclick="$('#filefield-{{id}}').show()"> 文件上传
+                        </label>
+                    </li>
+                    <li id="filefield-{{id}}" style="display:none"><input type="text" placeholder="表单field" class="form-control" name="filefield-{{id}}"></li>
+                    <li><input type="file" name="file-{{id}}" class="form-control"></li>
                 </ul>
                 <textarea id="bodyarea-{{id}}" name="requestbody-{{id}}" class="form-control" style="height:100px"></textarea>
             </div>
@@ -297,13 +311,11 @@ apilist_template = """
             </div>
         </div>
     </div>
+    <a href="javascript:;" onclick="addenv({{id}})">添加环境变量</a>
+    <div id="envlist-{{id}}" style="padding:20px">
+    </div>
 </div>
 """
-
-
-
-
-
 
 
 
@@ -313,6 +325,7 @@ result_template = """
     <label>requestHeader:</label> {{ req_header }} <br/>
     <label>requestBody:</label> {{ req_body }} <br/>
     <hr>
+    <label>responseCode:</label> {{ resp_code }} <br/>
     <label>responseHeader:</label> <br/>
     <textarea class="form-control" style="height:100px">{{ resp_header }}</textarea>
     <label>responseBody:</label> <br/>

@@ -26,7 +26,7 @@
                 </div>
             </div>
             <div class="lineitem">
-                <input class="form-control" id="missionName" type="text" name="missionName" value="Mission_{{ timenow }}">
+                <input class="form-control required" id="missionName" type="text" name="missionName" value="Mission_{{ timenow }}">
             </div>
         </div>
         <div>
@@ -75,7 +75,19 @@
                             <div role="tabpanel" class="tab-pane active" id="requestbodypanel-1">
                                 <div class="panel-body" id="req-body-panel-1">
                                     <ul class="list-inline">
-                                        <li><input type="file" name="file-1"></li>
+                                        <li>上传文件类型：</li>
+                                        <li>
+                                            <label class="radio-inline">
+                                              <input type="radio" name="radio-filetype-1" value="data" checked="checked" onclick="$('#filefield-1').hide()"> 请求数据
+                                            </label>
+                                        </li>
+                                        <li>
+                                            <label class="radio-inline">
+                                              <input type="radio" name="radio-filetype-1" value="file" onclick="$('#filefield-1').show()"> 文件上传
+                                            </label>
+                                        </li>
+                                        <li id="filefield-1" style="display:none"><input type="text" placeholder="表单field" name="filefield-1" class="form-control"></li>
+                                        <li><input type="file" name="file-1" class="form-control"></li>
                                     </ul>
                                     <textarea id="bodyarea-1" name="requestbody-1" class="form-control" style="height:100px">{"cellphone":"18516042356","password":"6547436690a26a399603a7096e876a2d"}</textarea>
                                 </div>
@@ -174,6 +186,9 @@
                             </div>
                             <!-- assert header end -->
                         </div>
+                        <a href="javascript:;" onclick="addenv(1)">添加全局变量</a>
+                        <div id="envlist-1" style="padding:20px">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -197,7 +212,7 @@
             </div>
             <div class="lineitem">
                 <ul class="list-inline">
-                    <li><label><span style="color:red">*</span>并发量：</label><input id="concurrent" name="concurrent" type="text" value="10"> <label><span style="color:red">*</span>持续时间：</label><input id="looptime" name="looptime" value="10" type="text"></li>
+                    <li><label><span style="color:red">*</span>并发量：</label><input id="concurrent" name="concurrent" type="text" value="10" class="required"> <label><span style="color:red">*</span>持续时间：</label><input id="looptime" class="required" name="looptime" value="10" type="text"></li>
                     <li>
                         <label class="radio-inline">
                           <input type="radio" name="looptimeOptions" value="0" checked="checked">秒
@@ -282,7 +297,7 @@
 <script>
 
     $(function(){
-
+        sessionStorage.clear()
         sessionStorage.choicedMachine = parseInt(0)
         sessionStorage.apicount = parseInt(1)
         getMachines();
@@ -349,6 +364,22 @@
             })
         })
     })
+
+    function addenv(apiid){
+        if(eval("sessionStorage.envcount_"+apiid+"")){
+            eval("sessionStorage.envcount_"+apiid+" = parseInt(sessionStorage.envcount_"+apiid+") + 1")
+        }else{
+            eval("sessionStorage.envcount_"+apiid+" = 1")
+        }
+        envid = eval("sessionStorage.envcount_"+apiid+"")
+
+        $("#envlist-"+apiid).append("<div id='env-"+apiid+"-"+envid+"'><input type='checkbox' name='env-"+apiid+"' style='display:none' checked='checked'>匹配: <label><input type='radio' name='envsource-"+apiid+"-"+envid+"' value='header'> 响应头</label> <label><input type='radio' name='envsource-"+apiid+"-"+envid+"' value='body' checked='checked'> 响应体</label> <input type='text' placeholder='正则匹配表达式'  class='required' name='envregx-"+apiid+"-"+envid+"'> <input type='text' class='required' name='envname-"+apiid+"-"+envid+"' placeholder='将匹配值保存为变量名'> <a href='javascript:;' onclick='delenv("+apiid+","+envid+")'>删除</a></div>")
+    }
+
+    function delenv(apiid,envid){
+        $("#env-"+apiid+"-"+envid).remove()
+        eval("sessionStorage.envcount_"+apiid+" = parseInt(sessionStorage.envcount_"+apiid+") - 1")
+    }
 
     function clearResult(){
         localStorage.clear()
@@ -504,11 +535,7 @@
 
 
     function validateForm(){
-        if(!$.trim($("#missionName").val())){
-            $("#missionName").focus();
-            layer.msg("名称不能为空",{offset:"200px"});
-            return false;
-        }
+        var allpass = true;
 
         for(var i=1;i<=parseInt(sessionStorage.apicount);i++){
             if(!$.trim($("#url-"+i).val())){
@@ -519,25 +546,22 @@
             }
         }
 
-        if(!$.trim($("#concurrent").val())){
-            $("#concurrent").focus();
-            layer.msg("请输入并发量",{offset:"200px"});
-            return false;
-        }
+        $(".required").each(function(){
+            if(!$(this).val()){
+                $(this).focus();
+                layer.msg("请填写该值",{offset:"200px"});
+                allpass = false;
+            }
+        })
 
-        if(!$.trim($("#looptime").val())){
-            $("#looptime").focus();
-            layer.msg("请输入持续时间",{offset:"200px"});
-            return false;
-        }
-
-        if(parseInt(sessionStorage.choicedMachine) == 0){
+        if(allpass && parseInt(sessionStorage.choicedMachine) == 0){
             layer.msg("请选择执行机器",{offset:"200px"})
             return false;
         }
 
-        return true;
+        return allpass;
     }
+
 
     function getMachines(){
         $.ajax({
@@ -552,6 +576,7 @@
         })
     }
 
+
     function showChange(id){
         if($("#machinediv_"+id).css("background-color") == 'rgba(0, 0, 0, 0)'){
             $("#machinediv_"+id).css("background-color","#87CEFF")
@@ -561,6 +586,7 @@
             sessionStorage.choicedMachine = parseInt(sessionStorage.choicedMachine) - 1
         }
     }
+
 
     function addApi(){
         layer.load(2,{offset:"400px"});
@@ -582,12 +608,14 @@
         })
     }
 
+
     function showapiconfig(apiid){
         $("#apilist > a").removeClass("active")
         $("#apilist-"+apiid).addClass("active")
         $(".apilistitem").hide()
         $("#apilistDetail-"+apiid).show()
     }
+
 
     function delapi(apiid){
         if(parseInt(sessionStorage.apicount) == 1){

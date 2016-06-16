@@ -28,13 +28,13 @@ class QueenBee(Thread):
         self.config = config
         self.statusController = statusController
         self.form = form
-        #self.checkobj = self._initCheckObj(form)
+        self.checkobjs = self._initCheckObjs(apicount)
         self.files = []
-        for name,file in files.items():
+        for file in files.values():
             if file.filename:
                 datafile = "%s/%s" %(self.config.UPLOAD_FOLDER,file.filename)
                 file.save(datafile)
-                self.files.append(datafile)
+                self.files.append((file.filename,datafile))
             else:
                 self.files.append(None)
         self.redisclient = None
@@ -56,21 +56,23 @@ class QueenBee(Thread):
         self.unknownErrors = 0
         self.assertionErrors = 0
 
-    def _initCheckObj(self,form,id):
+    def _initCheckObjs(self,apicount):
+        checkobjs = []
         checkobj = namedtuple("checkobj","bodyequal headerequal bodycontains headercontains bodyusereg headerusereg bodylengthtype bodylength headerlengthtype headerlength")
-        return checkobj(
-            self.form.get("equalValue-body-%s" %id),
-            self.form.get("equalValue-header-%s" %id),
-            self.form.get("containValue-body-%s" %id),
-            self.form.get("containValue-header-%s" %id),
-            self.form.get("useRegx-body-%s" %id),
-            self.form.get("useRegx-header-%s" %id),
-            self.form.get("lengthRadioOptions-body-%s" %id),
-            int(self.form.get("lengthValue-body-%s" %id)) if self.form.get("lengthValue-body-%s" %id) else None,
-            self.form.get("lengthRadioOptions-header-%s" %id),
-            int(self.form.get("lengthValue-header-%s" %id)) if self.form.get("lengthValue-header-%s" %id) else None
-        )
-
+        for i in range(apicount):
+            checkobjs.append(checkobj(
+                self.form.get("equalValue-body-%s" %(i+1)),
+                self.form.get("equalValue-header-%s" %(i+1)),
+                self.form.get("containValue-body-%s" %(i+1)),
+                self.form.get("containValue-header-%s" %(i+1)),
+                self.form.get("useRegx-body-%s" %(i+1)),
+                self.form.get("useRegx-header-%s" %(i+1)),
+                self.form.get("lengthRadioOptions-body-%s" %(i+1)),
+                int(self.form.get("lengthValue-body-%s" %(i+1))) if self.form.get("lengthValue-body-%s" %(i+1)) else None,
+                self.form.get("lengthRadioOptions-header-%s" %(i+1)),
+                int(self.form.get("lengthValue-header-%s" %(i+1))) if self.form.get("lengthValue-header-%s" %(i+1)) else None
+            ))
+        return checkobjs
 
     def dispatchClient(self,machine):
         if machine.ip == self.config.localip:
@@ -138,31 +140,40 @@ class QueenBee(Thread):
         self.redisclient.mset({"%s_startdelay" %self.id:startDelay,"%s_looptime" %self.id:self.looptime,"%s_status" %self.id:0})
         for i in range(self.apicount):
             data = self.form.get("requestbody-%s" %(i+1))
-            self.redisclient.lpush("%s_urls" %self.id,self.form.get("url-%s" %(i+1)))
-            self.redisclient.lpush("%s_methods" %self.id,self.form.get("type-%s" %(i+1)))
-            self.redisclient.lpush("%s_resptimeouts" %self.id,self.form.get("responseTimeout-%s" %(i+1)))
-            self.redisclient.lpush("%s_conntimeouts" %self.id,self.form.get("connectTimeout-%s" %(i+1)))
-            self.redisclient.lpush("%s_headers" %self.id,self.form.get("requestheader-%s" %(i+1)) or "{}")
-            self.redisclient.lpush("%s_datas" %self.id,data or "{}")
+            self.redisclient.rpush("%s_urls" %self.id,self.form.get("url-%s" %(i+1)))
+            self.redisclient.rpush("%s_methods" %self.id,self.form.get("type-%s" %(i+1)))
+            self.redisclient.rpush("%s_resptimeouts" %self.id,self.form.get("responseTimeout-%s" %(i+1)))
+            self.redisclient.rpush("%s_conntimeouts" %self.id,self.form.get("connectTimeout-%s" %(i+1)))
+            self.redisclient.rpush("%s_headers" %self.id,self.form.get("requestheader-%s" %(i+1)) or "{}")
+            self.redisclient.rpush("%s_datas" %self.id,data or "{}")
+
+            radiofile = self.form.get("radio-filetype-%s" %(i+1))
 
             m = re.search(r"{{ *file\[\d+\] *}}",data)
 
-            if m and self.files[i]:
-                with open(self.files[i],encoding="utf-8") as f:
+            if radiofile == "data" and m and self.files[i]:
+                with open(self.files[i][1],encoding="utf-8") as f:
                     lines = [line.strip() for line in f.readlines() if line.strip()]
                     for line in lines:
-                        self.redisclient.lpush("%s_filedata_%s" %(self.id,i+1),line)
+                        self.redisclient.rpush("%s_filedata_%s" %(self.id,i),line)
 
-                    self.redisclient.set("%s_datacounts" %(self.id,i+1),len(lines))
-                    self.redisclient.lpush("%s_filetypes" %self.id,2)
-            elif self.files[i]:
-                with open(self.files[i],"rb") as f:
-                    self.redisclient.set("%s_file_%s" %(self.id,i+1),f.read())
-                    self.redisclient.lpush("%s_filetypes" %self.id,1)
+                    self.redisclient.set("%s_datacount_%s" %(self.id,i),len(lines))
+                    self.redisclient.rpush("%s_filetypes" %self.id,2)
+            elif radiofile == "file" and self.files[i]:
+                with open(self.files[i][1],"rb") as f:
+                    self.redisclient.hmset("%s_file_%s" %(self.id,i),{"filecontent":f.read(),"filename":self.files[i][0],"filefield":self.form.get("filefield-%s" %(i+1))})
+                    self.redisclient.rpush("%s_filetypes" %self.id,1)
             else:
-                self.redisclient.lpush("%s_filetypes" %self.id,0)
+                self.redisclient.rpush("%s_filetypes" %self.id,0)
 
-        return
+            envcount = len(dict(self.form).get("env-%s" %(i+1),[]))
+            self.redisclient.rpush("%s_envcounts" %self.id,envcount)
+            for j in range(envcount):
+                envsource = self.form.get("envsource-%s-%s" %(i+1,j+1))
+                envname = self.form.get("envname-%s-%s" %(i+1,j+1))
+                envregx = self.form.get("envregx-%s-%s" %(i+1,j+1))
+                self.redisclient.hmset("%s_env_%s_%s" %(self.id,i,j),{"source":envsource,"name":envname,"regx":envregx})
+
         ##############################################连接远程机器####################################################
         self.statusController.set(self.id, {"p": 3, "i": "连接远程机器/下发压测程序","s":0})
 
@@ -241,6 +252,7 @@ class QueenBee(Thread):
                 self.end = True
                 break
             else:
+                print(self.honeyCount,"not equals",self.samples)
                 time.sleep(2)
 
         self.clear()
@@ -285,50 +297,50 @@ class QueenBee(Thread):
             output = stdout.read()
 
 
-    def checkResult(self,response):
-        if self.checkobj.bodyequal and self.checkobj.bodyequal != response["Body"]:
+    def checkResult(self,objid,response):
+        if self.checkobjs[objid].bodyequal and self.checkobjs[objid].bodyequal != response["Body"]:
             return False,"check body does not equal responseBody:%s" %response["Body"]
 
-        if self.checkobj.headerequal and self.checkobj.headerequal != response["Header"]:
+        if self.checkobjs[objid].headerequal and self.checkobjs[objid].headerequal != response["Header"]:
             return False,"check header does not equal responseHeader:%s" %response["Header"]
 
-        if self.checkobj.bodycontains and not self.checkobj.bodyusereg:
-            if self.checkobj.bodycontains not in response["Body"]:
+        if self.checkobjs[objid].bodycontains and not self.checkobjs[objid].bodyusereg:
+            if self.checkobjs[objid].bodycontains not in response["Body"]:
                 return False,"response body does not contain checkbody:%s" %response["Body"]
-        elif self.checkobj.bodycontains and self.checkobj.bodyusereg:
-            m = re.search(r"%s" %self.checkobj.bodycontains,response["Body"])
+        elif self.checkobjs[objid].bodycontains and self.checkobjs[objid].bodyusereg:
+            m = re.search(r"%s" %self.checkobjs[objid].bodycontains,response["Body"])
             if not m:
                 return False,"response body does not contain checkbody:%s" %response["Body"]
 
-        if self.checkobj.headercontains and not self.checkobj.headerusereg:
-            if self.checkobj.headercontains not in response["Header"]:
+        if self.checkobjs[objid].headercontains and not self.checkobjs[objid].headerusereg:
+            if self.checkobjs[objid].headercontains not in response["Header"]:
                 return False,"response header does not contain check header:%s" %response["Header"]
-        elif self.checkobj.headercontains and self.checkobj.headerusereg:
-            m = re.search(r"%s" %self.checkobj.headercontains,response["Header"])
+        elif self.checkobjs[objid].headercontains and self.checkobjs[objid].headerusereg:
+            m = re.search(r"%s" %self.checkobjs[objid].headercontains,response["Header"])
             if not m:
                 return False,"response header does not contain check header:%s" %response["Header"]
 
-        if self.checkobj.bodylengthtype:
-            if self.checkobj.bodylengthtype == "0":
-                if len(response["Body"]) > self.checkobj.bodylength:
-                    return False,"response body length(%s) is no less than %s" %(len(response["Body"]),self.checkobj.bodylength)
-            elif self.checkobj.bodylengthtype == "1":
-                if len(response["Body"]) != self.checkobj.bodylength:
-                    return False,"response body length(%s) does not equal %s" %(len(response["Body"]),self.checkobj.bodylength)
+        if self.checkobjs[objid].bodylengthtype:
+            if self.checkobjs[objid].bodylengthtype == "0":
+                if len(response["Body"]) > self.checkobjs[objid].bodylength:
+                    return False,"response body length(%s) is no less than %s" %(len(response["Body"]),self.checkobjs[objid].bodylength)
+            elif self.checkobjs[objid].bodylengthtype == "1":
+                if len(response["Body"]) != self.checkobjs[objid].bodylength:
+                    return False,"response body length(%s) does not equal %s" %(len(response["Body"]),self.checkobjs[objid].bodylength)
             else:
-                if len(response["Body"]) < self.checkobj.bodylength:
-                    return False,"response body length(%s) is no bigger than %s" %(len(response["Body"]),self.checkobj.bodylength)
+                if len(response["Body"]) < self.checkobjs[objid].bodylength:
+                    return False,"response body length(%s) is no bigger than %s" %(len(response["Body"]),self.checkobjs[objid].bodylength)
 
-        if self.checkobj.headerlengthtype:
-            if self.checkobj.headerlengthtype == "0":
-                if len(response["Header"]) > self.checkobj.headerlength:
-                    return False,"response header length(%s) is no less than %s" %(len(response["Header"]),self.checkobj.headerlength)
-            elif self.checkobj.headerlengthtype == "1":
-                if len(response["Header"]) != self.checkobj.headerlength:
-                    return False,"response header length(%s) does not equal %s" %(len(response["Header"]),self.checkobj.headerlength)
+        if self.checkobjs[objid].headerlengthtype:
+            if self.checkobjs[objid].headerlengthtype == "0":
+                if len(response["Header"]) > self.checkobjs[objid].headerlength:
+                    return False,"response header length(%s) is no less than %s" %(len(response["Header"]),self.checkobjs[objid].headerlength)
+            elif self.checkobjs[objid].headerlengthtype == "1":
+                if len(response["Header"]) != self.checkobjs[objid].headerlength:
+                    return False,"response header length(%s) does not equal %s" %(len(response["Header"]),self.checkobjs[objid].headerlength)
             else:
-                if len(response["Header"]) < self.checkobj.headerlength:
-                    return False,"response header length(%s) is no bigger than %s" %(len(response["Header"]),self.checkobj.headerlength)
+                if len(response["Header"]) < self.checkobjs[objid].headerlength:
+                    return False,"response header length(%s) is no bigger than %s" %(len(response["Header"]),self.checkobjs[objid].headerlength)
 
         return True,None
 
@@ -348,36 +360,45 @@ class QueenBee(Thread):
             Cookies       []*http.Cookie
         }
         """
-        bee = gnsq.Reader("success-%s" %self.id,"goodBee","%s:4150" %self.config.nsq_host)
+        bee = gnsq.Reader("%s_success" %self.id,"goodBee","%s:4150" %self.config.nsq_host)
         self.analysisBees.append(bee)
 
         @bee.on_message.connect
         def handler(bee, message):
             self.samples += 1
-            checkpass = True
             messagebody = message.body.decode()
-            m = json.loads(messagebody)
+            ms = json.loads(messagebody)
 
-            self.totalelapsed += m["Elapsed"]
+            elapsed = 0
+            checkpass,errorMsg = True,""
+            for i,m in enumerate(ms):
+                elapsed += m["Elapsed"]
+                cp,err = self.checkResult(i,m)
+                if not cp:
+                    checkpass = False
+                    errorMsg += "%s," %err
+                else:
+                    errorMsg += ","
 
-            if not self.min_elapsed or m["Elapsed"] < self.min_elapsed:
-                self.min_elapsed = m["Elapsed"]
+            self.totalelapsed += elapsed
 
-            if not self.max_elapsed or m["Elapsed"] > self.max_elapsed:
-                self.max_elapsed = m["Elapsed"]
+            if not self.min_elapsed or elapsed < self.min_elapsed:
+                self.min_elapsed = elapsed
 
-            checkpass,errorMsg = self.checkResult(m)
+            if not self.max_elapsed or elapsed > self.max_elapsed:
+                self.max_elapsed = elapsed
+            
             if not checkpass:
                 self.assertionErrors += 1
                 self.redisclient.lpush("%s_assertionError"%self.id,errorMsg)
 
-            self.redisclient.lpush("%s_elapsed" %self.id,m["Elapsed"])
+            self.redisclient.lpush("%s_elapsed" %self.id,elapsed)
 
         bee.start()
 
 
     def collectBadHoney(self,honeyid):
-        bee = gnsq.Reader("failed-%s" %self.id,"badBee","%s:4150" %self.config.nsq_host)
+        bee = gnsq.Reader("%s_failed" %self.id,"badBee","%s:4150" %self.config.nsq_host)
         self.analysisBees.append(bee)
         @bee.on_message.connect
         def handler(bee, message):
@@ -412,7 +433,7 @@ class QueenBee(Thread):
         topics = requests.get(url).json()["topics"]
         message_count = 0
         for topic in topics:
-            if topic["topic_name"] in ["success-%s" %self.id,"failed-%s" %self.id]:
+            if topic["topic_name"] in ["%s_success" %self.id,"%s_failed" %self.id]:
                 message_count += topic["message_count"]
 
         return message_count
