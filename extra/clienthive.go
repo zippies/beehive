@@ -66,10 +66,11 @@ func randomPhone() string {
 	return fmt.Sprintf("%v%v", phoneHead[ranindex], randomInt(10000000, 19999999))
 }
 
-func dealRandom(value interface{}) []byte {
+func dealRandom(value interface{}, envmap map[string]string) []byte {
 	tmpstr := fmt.Sprint(value)
 	reg_phone := regexp.MustCompile(`{{ *randomPhone\(\) *}}`)
 	reg_int := regexp.MustCompile(`{{ *randomInt\((\d+),(\d+)\) *}}`)
+	reg_env := regexp.MustCompile(`{{ *env\((.+)\) *}}`)
 
 	len_ranint := len(reg_int.FindAllString(tmpstr, -1))
 
@@ -92,6 +93,14 @@ func dealRandom(value interface{}) []byte {
 		tmpstr = strings.Replace(tmpstr, matchstr, fmt.Sprintf("%v", ranphone), 1)
 	}
 
+	len_env := len(reg_env.FindAllString(tmpstr, -1))
+
+	for i := 0; i < len_env; i++ {
+		matchlist := reg_env.FindStringSubmatch(tmpstr)
+		name := matchlist[1]
+		tmpstr = strings.Replace(tmpstr, matchlist[0], fmt.Sprintf("%v", envmap[name]), 1)
+	}
+
 	return []byte(tmpstr)
 }
 
@@ -103,15 +112,18 @@ func startClient(
 	ip string) {
 
 	for start := time.Now(); int(time.Now().Sub(start).Seconds()) < looptime; {
+		envmap := make(map[string]string)
+
 		for index, request := range requests {
 			var req *http.Request
+			var e error
 
 			dataGenerator = request.dataGenerator.Next()
-			data := dealRandom(dataGenerator.Value)
+			data := dealRandom(dataGenerator.Value, envmap)
 
 			if request.filetype != 1 {
-				req, e := http.NewRequest(request.method, request.url, bytes.NewReader(data))
-				failOnError(e, "Failed to newRequest")
+				req, e = http.NewRequest(request.method, request.url, bytes.NewReader(data))
+				failOnError(e, "Failed to newRequest,filetype != 1")
 				for key, value := range request.header {
 					req.Header.Set(key, value)
 				}
@@ -121,16 +133,19 @@ func startClient(
 				w := multipart.NewWriter(body)
 				content_type := w.FormDataContentType()
 				e := json.Unmarshal(data, &dataobj)
-				failOnError(e, "Failed to Marshal data")
+				failOnError(e, "Failed to Unmarshal data")
 				for key, value := range dataobj {
 					w.WriteField(key, value)
 				}
-				file, _ := w.CreateFormFile("filecontent", "1.docx")
+				file, _ := w.CreateFormFile(request.filefield, request.filename)
 				file.Write(request.filecontent)
 				w.Close()
-				req, e := http.NewRequest(request.method, request.url, body)
-				failOnError(e, "Failed to newRequest")
+				req, e = http.NewRequest(request.method, request.url, body)
+				failOnError(e, "Failed to newRequest,filetype == 1")
 				req.Header.Set("Content-Type", content_type)
+				for key, value := range request.header {
+					req.Header.Set(key, value)
+				}
 			}
 			start_time := time.Now()
 			resp, err := request.client.Do(req)
@@ -138,6 +153,23 @@ func startClient(
 			requests[index].resp = resp
 			requests[index].err = err
 			requests[index].elapsed = end_time.Sub(start_time).Seconds()
+			if err != nil {
+				break
+			}
+			for _, env := range request.envs {
+				var datastring string
+				if env.source == "header" {
+					databytes, err := json.Marshal(resp.Header)
+					failOnError(err, "Failed to Marshal resp.Header")
+					datastring = string(databytes)
+				} else {
+					databytes, err := ioutil.ReadAll(resp.Body)
+					failOnError(err, "Failed to read resp.Body")
+					datastring = string(databytes)
+				}
+				regx := regexp.MustCompile(env.regx)
+				envmap[env.name] = regx.FindString(datastring)
+			}
 		}
 		group_report.Add(1)
 		go sendResult(missionid, ip, worker, requests)
@@ -195,14 +227,20 @@ func sendResult(missionid string,
 			report.Machine_ip = ip
 			defer request.resp.Body.Close()
 		}
-
 		reports = append(reports, report)
+		//fmt.Println(index, request.url, report.StatusCode, report.Body, 111)
 	}
 	body, err := json.Marshal(&reports)
 	failOnError(err, "Failed to Marshall reports")
 	err = worker.Publish(topic, []byte(body))
 	failOnError(err, "Failed to publish a message")
 	group_report.Done()
+}
+
+type Env struct {
+	source string
+	name   string
+	regx   string
 }
 
 type Request struct {
@@ -213,6 +251,10 @@ type Request struct {
 	dataGenerator *ring.Ring
 	filetype      int
 	filecontent   []byte
+	filefield     string
+	filename      string
+	envcount      int
+	envs          []Env
 	resp          *http.Response
 	err           error
 	elapsed       float64
@@ -223,15 +265,15 @@ func main() {
 	config.DialTimeout = 5 * 1e9
 	config.WriteTimeout = 60 * 1e9
 	config.HeartbeatInterval = 10 * 1e9
-	missionid := 10
-	//nsqd_addr, redis_addr, missionid := os.Args[1], os.Args[2], os.Args[3]
-	//worker, err := nsq.NewProducer(nsqd_addr, config)
-	worker, err := nsq.NewProducer("104.236.5.165:4150", config)
+	missionid := "32"
+	nsqd_addr, redis_addr, missionid := os.Args[1], os.Args[2], os.Args[3]
+	worker, err := nsq.NewProducer(nsqd_addr, config)
+	//worker, err := nsq.NewProducer("104.236.5.165:4150", config)
 	failOnError(err, "Failed to newProducer")
 
 	//connect to redis
-	redis_conn, err := redis.Dial("tcp", "104.131.29.105:6379")
-	//redis_conn, err := redis.Dial("tcp", redis_addr)
+	//redis_conn, err := redis.Dial("tcp", "104.131.29.105:6379")
+	redis_conn, err := redis.Dial("tcp", redis_addr)
 	failOnError(err, "Failed to connect to redis")
 	defer redis_conn.Close()
 
@@ -286,25 +328,48 @@ func main() {
 		var tmpdata map[string]interface{}
 
 		url, err := redis_conn.Do("lindex", fmt.Sprintf("%v_urls", missionid), i)
-		failOnError(err, "Failed to query Redis")
+		failOnError(err, "Failed to query Redis,url")
 		method, err := redis_conn.Do("lindex", fmt.Sprintf("%v_methods", missionid), i)
-		failOnError(err, "Failed to query Redis")
+		failOnError(err, "Failed to query Redis,method")
 		resptimeout, err := redis_conn.Do("lindex", fmt.Sprintf("%v_resptimeouts", missionid), i)
-		failOnError(err, "Failed to query Redis")
+		failOnError(err, "Failed to query Redis,resptimeout")
 		conntimeout, err := redis_conn.Do("lindex", fmt.Sprintf("%v_conntimeouts", missionid), i)
-		failOnError(err, "Failed to query Redis")
+		failOnError(err, "Failed to query Redis,conntimeout")
 		redis_header, err := redis_conn.Do("lindex", fmt.Sprintf("%v_headers", missionid), i)
-		failOnError(err, "Failed to query Redis")
+		failOnError(err, "Failed to query Redis,redis_header")
 		redis_data, err := redis_conn.Do("lindex", fmt.Sprintf("%v_datas", missionid), i)
-		failOnError(err, "Failed to query Redis")
+		failOnError(err, "Failed to query Redis,redis_data")
 		redis_filetype, err := redis_conn.Do("lindex", fmt.Sprintf("%v_filetypes", missionid), i)
-		failOnError(err, "Failed to query Redis")
+		failOnError(err, "Failed to query Redis,redis_filetype")
+		redis_envcount, err := redis_conn.Do("lindex", fmt.Sprintf("%v_envcounts", missionid), i)
+		failOnError(err, "Failed to query Redis,redis_envcounts")
 
 		request.url = string(url.([]byte))
 		request.method = string(method.([]byte))
 
 		filetype, err := strconv.Atoi(string(redis_filetype.([]byte)))
 		failOnError(err, "Failed to parse redis_filetype<string> to int")
+
+		request.filetype = filetype
+
+		envcount, err := strconv.Atoi(string(redis_envcount.([]byte)))
+		failOnError(err, "Failed to parse redis_envcount<string> to int")
+
+		request.envcount = envcount
+		for j := 0; j < envcount; j++ {
+			var env Env
+			redis_envsource, err := redis_conn.Do("hget", fmt.Sprintf("%v_env_%v_%v", missionid, i, j), "source")
+			failOnError(err, "Failed to query Redis,redis_envsource")
+			redis_envname, err := redis_conn.Do("hget", fmt.Sprintf("%v_env_%v_%v", missionid, i, j), "name")
+			failOnError(err, "Failed to query Redis,redis_envname")
+			redis_envregx, err := redis_conn.Do("hget", fmt.Sprintf("%v_env_%v_%v", missionid, i, j), "regx")
+			failOnError(err, "Failed to query Redis,redis_envregx")
+			env.source = string(redis_envsource.([]byte))
+			env.name = string(redis_envname.([]byte))
+			env.regx = string(redis_envregx.([]byte))
+			request.envs = append(request.envs, env)
+		}
+
 		conn_timeout, err := strconv.Atoi(string(conntimeout.([]byte)))
 		failOnError(err, "Failed to parse conntimeout<string> to int")
 		resp_timeout, err := strconv.Atoi(string(resptimeout.([]byte)))
@@ -322,8 +387,6 @@ func main() {
 			failOnError(err, "Failed to Unmarshal redis-data to map-data")
 		}
 
-		request.filetype = filetype
-
 		data, err := json.Marshal(tmpdata)
 		var dataCount int
 		switch filetype {
@@ -331,9 +394,15 @@ func main() {
 			dataCount = 1
 		case 1:
 			dataCount = 1
-			redis_filecontent, err := redis_conn.Do("get", fmt.Sprintf("%v_file_%v", missionid, i))
+			redis_filecontent, err := redis_conn.Do("hget", fmt.Sprintf("%v_file_%v", missionid, i), "filecontent")
 			failOnError(err, "Failed to query Redis filecontent")
+			redis_filefield, err := redis_conn.Do("hget", fmt.Sprintf("%v_file_%v", missionid, i), "filefield")
+			failOnError(err, "Failed to query Redis field")
+			redis_filename, err := redis_conn.Do("hget", fmt.Sprintf("%v_file_%v", missionid, i), "filename")
+			failOnError(err, "Failed to query Redis filename")
 			request.filecontent = redis_filecontent.([]byte)
+			request.filefield = string(redis_filefield.([]byte))
+			request.filename = string(redis_filename.([]byte))
 		case 2:
 			redis_datacount, err := redis_conn.Do("get", fmt.Sprintf("%v_datacount_%v", missionid, i))
 			failOnError(err, "Failed to query Redis")
@@ -349,10 +418,10 @@ func main() {
 		len_ranint := len(reg_file.FindAllString(s_data, -1))
 
 		if len_ranint > 0 {
-			for i := 0; i < dataCount; i++ {
+			for c := 0; c < dataCount; c++ {
 				matchlist := reg_file.FindStringSubmatch(s_data)
 
-				indexdata, err := redis_conn.Do("lindex", fmt.Sprintf("filedata-%v", missionid), i)
+				indexdata, err := redis_conn.Do("lindex", fmt.Sprintf("%v_filedata_%v", missionid, i), c)
 				failOnError(err, "Failed to query Redis")
 				values := strings.Split(string(indexdata.([]byte)), " ")
 				r_data := s_data
@@ -360,6 +429,7 @@ func main() {
 					undermatch := strings.Replace(matchlist[0], matchlist[1], fmt.Sprintf("%v", k), -1)
 					r_data = strings.Replace(r_data, undermatch, v, -1)
 				}
+
 				dataGenerator.Value = r_data
 				dataGenerator = dataGenerator.Next()
 			}
@@ -418,9 +488,9 @@ func main() {
 			for i := 0; i < con; i++ {
 				group_client.Add(1)
 				time.Sleep(time.Duration(start_delay/float64(con)) * time.Nanosecond)
-				go startClient("10", requests, looptime, worker, ip)
+				go startClient(missionid, requests, looptime, worker, ip)
 			}
-			go countTime(redis_conn, "10")
+			go countTime(redis_conn, missionid)
 			println("all clients startted ,looptime", looptime)
 
 			group_client.Wait()
