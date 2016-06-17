@@ -12,6 +12,16 @@
             font-size:12px;
             color:#CD3700;
         }
+        .apipanel {
+            margin-bottom:10px;
+            padding-top:10px;
+            -webkit-border-radius: 8px;
+            -moz-border-radius: 8px;
+            border-radius: 8px; 
+            -webkit-box-shadow: #666 0px 0px 3px; 
+            -moz-box-shadow: #666 0px 0px 3px; 
+            box-shadow: #666 0px 0px 3px;
+        }
     </style>
 {% endblock %}
 
@@ -46,150 +56,7 @@
                         </div>
                     </div>
 
-                    <div class="col-md-11 apilistitem" id="apilistDetail-1">
-                        <input type="checkbox" name="apiitems" checked="checked" style="display:none"/>
-                        <ul class="list-inline">
-                            <li>Request Type:</li>
-                            <li>
-                                <select name="type-1" class="form-control">
-                                    <option value="GET">GET</option>
-                                    <option value="POST">POST</option>
-                                    <option value="PUT">PUT</option>
-                                    <option value="DELETE">DELETE</option>
-                                </select>
-                            </li>
-                            <li>
-                                <input id="url-1" name="url-1" class="form-control" style="width:800px" maxlength="120" type="text" placeholder="请求地址" value="http://121.43.101.211:8180/suime-user/student/login">
-                            </li>
-                            <li><a class="btn btn-default" href="javascript:;" onclick="testapi(1)">测试一下</a></li>
-                            <li><a href="javascript:;" class="btn btn-danger" onclick="delapi(1)">删除</a></li>
-                        </ul>
-                        <label>Request Settings</label>
-                        <ul class="nav nav-tabs">
-                            <li role="presentation" class="active"><a href="#requestbodypanel-1" aria-controls="requestbodypanel-1" role="tab" data-toggle="tab">body</a></li>
-                            <li role="presentation"><a href="#requestheaderpanel-1" aria-controls="requestheaderpanel-1" role="tab" data-toggle="tab">header</a></li>
-                            <li role="presentation"><a href="#requestauthpanel-1" aria-controls="requestauthpanel-1" role="tab" data-toggle="tab">authorization</a></li>
-                        </ul>
-                        <div class="tab-content">
-                            <!-- body begin -->
-                            <div role="tabpanel" class="tab-pane active" id="requestbodypanel-1">
-                                <div class="panel-body" id="req-body-panel-1">
-                                    <ul class="list-inline">
-                                        <li>上传文件类型：</li>
-                                        <li>
-                                            <label class="radio-inline">
-                                              <input type="radio" name="radio-filetype-1" value="data" checked="checked" onclick="$('#filefield-1').hide()"> 请求数据
-                                            </label>
-                                        </li>
-                                        <li>
-                                            <label class="radio-inline">
-                                              <input type="radio" name="radio-filetype-1" value="file" onclick="$('#filefield-1').show()"> 文件上传
-                                            </label>
-                                        </li>
-                                        <li id="filefield-1" style="display:none"><input type="text" placeholder="表单field" name="filefield-1" class="form-control"></li>
-                                        <li><input type="file" name="file-1" class="form-control"></li>
-                                    </ul>
-                                    <textarea id="bodyarea-1" name="requestbody-1" class="form-control" style="height:100px">{"cellphone":"18516042356","password":"6547436690a26a399603a7096e876a2d"}</textarea>
-                                </div>
-                            </div>
-                            <!-- body end -->
-                            <!-- header begin -->
-                            <div role="tabpanel" class="tab-pane" id="requestheaderpanel-1">
-                                <div class="panel-body" id="req-header-panel-1">
-                                    <textarea id="headerarea" name="requestheader-1" class="form-control"></textarea>
-                                </div>
-                            </div>
-                            <!-- header ennd -->
-                            <!-- auth begin -->
-                            <div role="tabpanel" class="tab-pane" id="requestauthpanel-1">
-                                <div class="panel-body" id="req-auth-panel">
-                                    no auth
-                                </div>
-                            </div>
-                            <!-- auth end -->
-                        </div>
-                        <label>Assertions</label>
-                        <ul class="nav nav-tabs">
-                            <li role="presentation" class="active"><a href="#assertbodypanel-1" aria-controls="assertbodypanel-1" role="tab" data-toggle="tab">body</a></li>
-                            <li role="presentation"><a href="#asserttimepanel-1" aria-controls="asserttimepanel-1" role="tab" data-toggle="tab">time</a></li>
-                            <li role="presentation"><a href="#assertheaderpanel-1" aria-controls="assertheaderpanel-1" role="tab" data-toggle="tab">header</a></li>
-                        </ul>
-                        <div class="tab-content">
-                            <!-- assert body begin -->
-                            <div role="tabpanel" class="tab-pane active" id="assertbodypanel-1">
-                                <div class="panel-body" id="assert-body-panel-1">
-                                    <div class="lineitem">
-                                        equals:<input type="text" name="equalValue-body-1" style="width:90%">
-                                    </div>
-                                    <div class="lineitem">
-                                        contains:
-                                        <label class="checkbox-inline">
-                                          <input type="checkbox" name="useRegx-body-1" value="1"> 正则匹配
-                                        </label>
-                                        <input type="text" name="containValue-body-1" style="width:85%">
-                                    </div>
-                                    <div class="lineitem">
-                                        length:
-                                        <label class="radio-inline">
-                                          <input type="radio" name="lengthRadioOptions-body-1" value="0"> 小于
-                                        </label>
-                                        <label class="radio-inline">
-                                          <input type="radio" name="lengthRadioOptions-body-1" value="1"> 等于
-                                        </label>
-                                        <label class="radio-inline">
-                                          <input type="radio" name="lengthRadioOptions-body-1" value="2"> 大于
-                                        </label>
-                                        <input type="text" name="lengthValue-body" style="width:10%"> 字节
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- assert body end -->
-                            <!-- assert time begin -->
-                            <div role="tabpanel" class="tab-pane" id="asserttimepanel-1">
-                                <div class="panel-body" id="assert-time-panel-1">
-                                    <div class="lineitem">
-                                        connect  timeout: <input type="text" name="connectTimeout-1" value="5"> 秒
-                                    </div>
-                                    <div class="lineitem">
-                                        response timeout: <input type="text" name="responseTimeout-1" value="10"> 秒
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- assert time ennd -->
-                            <!-- assert header begin -->
-                            <div role="tabpanel" class="tab-pane" id="assertheaderpanel-1">
-                                <div class="panel-body" id="assert-header-panel-1">
-                                    <div class="lineitem">
-                                        equals:<input type="text" name="equalValue-header-1" style="width:90%">
-                                    </div>
-                                    <div class="lineitem">
-                                        contains:
-                                        <label class="checkbox-inline">
-                                          <input type="checkbox" name="useRegx-header-1" value="1"> 正则匹配
-                                        </label>
-                                        <input type="text" name="containValue-header-1" style="width:85%">
-                                    </div>
-                                    <div class="lineitem">
-                                        length:
-                                        <label class="radio-inline">
-                                          <input type="radio" name="lengthRadioOptions-header-1" value="0"> 小于
-                                        </label>
-                                        <label class="radio-inline">
-                                          <input type="radio" name="lengthRadioOptions-header-1" value="1"> 等于
-                                        </label>
-                                        <label class="radio-inline">
-                                          <input type="radio" name="lengthRadioOptions-header-1" value="2"> 大于
-                                        </label>
-                                        <input type="text" name="lengthValue-header-1" style="width:10%"> 字节
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- assert header end -->
-                        </div>
-                        <a href="javascript:;" onclick="addenv(1)">添加全局变量</a>
-                        <div id="envlist-1" style="padding:20px">
-                        </div>
-                    </div>
+                    {{ api_1|safe }}
                 </div>
             </div>
         </div>
@@ -212,7 +79,7 @@
             </div>
             <div class="lineitem">
                 <ul class="list-inline">
-                    <li><label><span style="color:red">*</span>并发量：</label><input id="concurrent" name="concurrent" type="text" value="10" class="required"> <label><span style="color:red">*</span>持续时间：</label><input id="looptime" class="required" name="looptime" value="10" type="text"></li>
+                    <li><label><span style="color:red">*</span>并发量：</label><input id="concurrent" name="concurrent" type="text" value="1" class="required"> <label><span style="color:red">*</span>持续时间：</label><input id="looptime" class="required" name="looptime" value="10" type="text"></li>
                     <li>
                         <label class="radio-inline">
                           <input type="radio" name="looptimeOptions" value="0" checked="checked">秒
@@ -297,6 +164,8 @@
 <script>
 
     $(function(){
+        $("#helponenv").popover({html:true})
+        $("#helponfile").popover({html:true})
         sessionStorage.clear()
         sessionStorage.choicedMachine = parseInt(0)
         sessionStorage.apicount = parseInt(1)
@@ -373,7 +242,7 @@
         }
         envid = eval("sessionStorage.envcount_"+apiid+"")
 
-        $("#envlist-"+apiid).append("<div id='env-"+apiid+"-"+envid+"'><input type='checkbox' name='env-"+apiid+"' style='display:none' checked='checked'>匹配: <label><input type='radio' name='envsource-"+apiid+"-"+envid+"' value='header'> 响应头</label> <label><input type='radio' name='envsource-"+apiid+"-"+envid+"' value='body' checked='checked'> 响应体</label> <input type='text' placeholder='正则匹配表达式'  class='required' name='envregx-"+apiid+"-"+envid+"'> <input type='text' class='required' name='envname-"+apiid+"-"+envid+"' placeholder='将匹配值保存为变量名'> <a href='javascript:;' onclick='delenv("+apiid+","+envid+")'>删除</a></div>")
+        $("#envlist-"+apiid).append("<div id='env-"+apiid+"-"+envid+"'><input type='checkbox' name='env-"+apiid+"' style='display:none' checked='checked'>匹配自: <label><input type='radio' name='envsource-"+apiid+"-"+envid+"' value='header'> 响应头</label> <label><input type='radio' name='envsource-"+apiid+"-"+envid+"' value='body' checked='checked'> 响应体</label> <input type='text' placeholder='正则匹配表达式'  class='required' name='envregx-"+apiid+"-"+envid+"'> <input type='text' class='required' name='envname-"+apiid+"-"+envid+"' placeholder='将匹配值保存为变量名'> <a href='javascript:;' onclick='delenv("+apiid+","+envid+")'>删除</a></div>")
     }
 
     function delenv(apiid,envid){

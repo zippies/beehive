@@ -14,6 +14,35 @@ config = Config()
 redis_conn = redis.Redis(config.redis_host,config.redis_port,config.redis_db)
 statusController = StatusController(redis_conn)
 
+test_url = "http://121.43.101.211:8180/suime-user/student/login"
+test_data = '{"cellphone":18516042356,"password":"6547436690a26a399603a7096e876a2d"}'
+
+placeholder_data = """
+请求body数据,json格式,例：{"username":"abc","password":"abc"}
+---- 需要从txt文件读取数据时,使用以下方式：
+---- {"username":"{{ file[0] }}","password":"{{ file[1] }}"}
+---- 其中{{ file[0] }}将从上传的txt文件第1列读取,{{ file[1] }}会从上传文件的第二列读取,依此类推;txt文件内数据以一个空格隔开，例：username password
+""".strip()
+
+placeholder_header = """
+请求头,json格式,例: {"content-type":"application/json"}
+""".strip()
+
+helponenv = """
+【适用场景】<br>
+&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp当需要测试多个接口,后一个接口要使用前一个接口的返回值时,需要在前一个接口中配置该项,从响应头或者响应body中将正则表达式匹配到的值保存为变量。<br>
+【用法】<br>
+&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp在后一个接口的参数中使用 {{ env(变量名) }} 来获取到全局变量的值。例：{{ env(token) }}
+""".strip()
+
+helponfile = """
+【适用场景】<br>
+&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp当接口需要上传文件,或者请求数据中的字段需要从文件中读取时,需要使用此行配置。<br>
+【用法-请求数据】<br>
+&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp接口请求数据从文件读取时,上传文件类型选择[请求数据],并上传本地txt文件即可,数据配置参见下面文本框提示。<br>
+【用法-文件上传】<br>
+&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp接口需要上传文件时,上传文件类型选择[文件上传],并上传本地文件即可；
+""".strip()
 
 @url.route("/")
 @url.route("/missions")
@@ -61,7 +90,28 @@ def newMission():
             info["errorMsg"] = str(e)
         finally:
             return jsonify(info)
-    return render_template("newMission.html",choiced="newMission",timenow=timenow)
+
+    api_1 = Template(apilist_template).render(
+        id=1,
+        placeholder_data=placeholder_data,
+        placeholder_header=placeholder_header,
+        test_url=test_url,
+        test_data=test_data,
+        helpon=True,
+        helponenv=helponenv,
+        helponfile=helponfile
+    )
+
+    return render_template(
+        "newMission.html",
+        choiced="newMission",
+        api_1=api_1,
+        timenow=timenow,
+        helponenv=helponenv,
+        helponfile=helponfile,
+        placeholder_data=placeholder_data,
+        placeholder_header=placeholder_header
+    )
 
 
 @url.route("/freshstatus/<int:id>")
@@ -170,149 +220,153 @@ def testApi(apiid):
 @url.route("/getapitemplate/<int:id>")
 def getApiTemplate(id):
     apilist = Template(apilist_template).render(
-        id=id
+        id=id,
+        placeholder_data=placeholder_data,
+        placeholder_header=placeholder_header
     )
     return apilist
 
 
 
 apilist_template = """
-<div class="col-md-11 apilistitem" id="apilistDetail-{{id}}">
-    <input type="checkbox" name="apiitems" checked="checked" style="display:none"/>
-    <ul class="list-inline">
-        <li>Request Type:</li>
-        <li>
-            <select name="type-{{id}}" class="form-control">
-                <option value="GET">GET</option>
-                <option value="POST">POST</option>
-                <option value="PUT">PUT</option>
-                <option value="DELETE">DELETE</option>
-            </select>
-        </li>
-        <li>
-            <input id="url-{{id}}" name="url-{{id}}" class="form-control" style="width:800px" maxlength="120" type="text" placeholder="请求地址" value="">
-        </li>
-        <li><a class="btn btn-default" href="javascript:;" onclick="testapi({{id}})">测试一下</a></li>
-        <li><a href="javascript:;" class="btn btn-danger" onclick="delapi({{id}})">删除</a></li>
-    </ul>
-    <label>Request Settings</label>
-    <ul class="nav nav-tabs">
-        <li role="presentation" class="active"><a href="#requestbodypanel-{{id}}" aria-controls="requestbodypanel-{{id}}" role="tab" data-toggle="tab">body</a></li>
-        <li role="presentation"><a href="#requestheaderpanel-{{id}}" aria-controls="requestheaderpanel-{{id}}" role="tab" data-toggle="tab">header</a></li>
-        <li role="presentation"><a href="#requestauthpanel-{{id}}" aria-controls="requestauthpanel-{{id}}" role="tab" data-toggle="tab">authorization</a></li>
-    </ul>
-    <div class="tab-content">
-        <!-- body begin -->
-        <div role="tabpanel" class="tab-pane active" id="requestbodypanel-{{id}}">
-            <div class="panel-body" id="req-body-panel-{{id}}">
-                <ul class="list-inline">
-                    <li>上传文件类型：</li>
-                    <li>
-                        <label class="radio-inline">
-                          <input type="radio" name="radio-filetype-{{id}}" value="data" checked="checked" onclick="$('#filefield-{{id}}').hide()"> 请求数据
-                        </label>
-                    </li>
-                    <li>
-                        <label class="radio-inline">
-                          <input type="radio" name="radio-filetype-{{id}}" value="file" onclick="$('#filefield-{{id}}').show()"> 文件上传
-                        </label>
-                    </li>
-                    <li id="filefield-{{id}}" style="display:none"><input type="text" placeholder="表单field" class="form-control" name="filefield-{{id}}"></li>
-                    <li><input type="file" name="file-{{id}}" class="form-control"></li>
-                </ul>
-                <textarea id="bodyarea-{{id}}" name="requestbody-{{id}}" class="form-control" style="height:100px"></textarea>
-            </div>
-        </div>
-        <!-- body end -->
-        <!-- header begin -->
-        <div role="tabpanel" class="tab-pane" id="requestheaderpanel-{{id}}">
-            <div class="panel-body" id="req-header-panel-{{id}}">
-                <textarea id="headerarea" name="requestheader-{{id}}" class="form-control"></textarea>
-            </div>
-        </div>
-        <!-- header ennd -->
-        <!-- auth begin -->
-        <div role="tabpanel" class="tab-pane" id="requestauthpanel-{{id}}">
-            <div class="panel-body" id="req-auth-panel">
-                no auth
-            </div>
-        </div>
-        <!-- auth end -->
-    </div>
-    <label>Assertions</label>
-    <ul class="nav nav-tabs">
-        <li role="presentation" class="active"><a href="#assertbodypanel-{{id}}" aria-controls="assertbodypanel-{{id}}" role="tab" data-toggle="tab">body</a></li>
-        <li role="presentation"><a href="#asserttimepanel-{{id}}" aria-controls="asserttimepanel-{{id}}" role="tab" data-toggle="tab">time</a></li>
-        <li role="presentation"><a href="#assertheaderpanel-{{id}}" aria-controls="assertheaderpanel-{{id}}" role="tab" data-toggle="tab">header</a></li>
-    </ul>
-    <div class="tab-content">
-        <div role="tabpanel" class="tab-pane active" id="assertbodypanel-{{id}}">
-            <div class="panel-body" id="assert-body-panel-{{id}}">
-                <div class="lineitem">
-                    equals:<input type="text" name="equalValue-body-{{id}}" style="width:90%">
-                </div>
-                <div class="lineitem">
-                    contains:
-                    <label class="checkbox-inline">
-                      <input type="checkbox" name="useRegx-body-{{id}}" value="1"> 正则匹配
-                    </label>
-                    <input type="text" name="containValue-body-{{id}}" style="width:85%">
-                </div>
-                <div class="lineitem">
-                    length:
-                    <label class="radio-inline">
-                      <input type="radio" name="lengthRadioOptions-body-{{id}}" value="0"> 小于
-                    </label>
-                    <label class="radio-inline">
-                      <input type="radio" name="lengthRadioOptions-body-{{id}}" value="1"> 等于
-                    </label>
-                    <label class="radio-inline">
-                      <input type="radio" name="lengthRadioOptions-body-{{id}}" value="2"> 大于
-                    </label>
-                    <input type="text" name="lengthValue-body" style="width:10%"> 字节
+<div class="col-md-11 apilistitem apipanel" id="apilistDetail-{{id}}">
+    <h4><span class="label label-success">请求设置</span></h4>
+    <div style="padding-left:20px">
+        <input type="checkbox" name="apiitems" checked="checked" style="display:none"/>
+        <ul class="list-inline" style="width:100%">
+            <li>调用方法:</li>
+            <li>
+                <select name="type-{{id}}" class="form-control">
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+            </li>
+            <li style="width:60%">
+                <input id="url-{{id}}" name="url-{{id}}" class="form-control" maxlength="120" type="text" placeholder="接口地址" value="{{ test_url }}">
+            </li>
+            <li><a class="btn btn-default" href="javascript:;" onclick="testapi({{id}})">测试一下</a></li>
+            <li><a href="javascript:;" class="btn btn-danger" onclick="delapi({{id}})">删除</a></li>
+        </ul>
+        
+        <ul class="nav nav-tabs">
+            <li role="presentation" class="active"><a href="#requestbodypanel-{{id}}" aria-controls="requestbodypanel-{{id}}" role="tab" data-toggle="tab">body</a></li>
+            <li role="presentation"><a href="#requestheaderpanel-{{id}}" aria-controls="requestheaderpanel-{{id}}" role="tab" data-toggle="tab">header</a></li>
+        </ul>
+        <div class="tab-content">
+            <!-- body begin -->
+            <div role="tabpanel" class="tab-pane active" id="requestbodypanel-{{id}}">
+                <div class="panel-body" id="req-body-panel-{{id}}">
+                    <ul class="list-inline">
+                        <li>上传文件类型：</li>
+                        <li>
+                            <label class="radio-inline">
+                              <input type="radio" name="radio-filetype-{{id}}" value="data" checked="checked" onclick="$('#filefield-{{id}}').hide()"> 请求数据
+                            </label>
+                        </li>
+                        <li>
+                            <label class="radio-inline">
+                              <input type="radio" name="radio-filetype-{{id}}" value="file" onclick="$('#filefield-{{id}}').show()"> 文件上传
+                            </label>
+                        </li>
+                        <li id="filefield-{{id}}" style="display:none"><input type="text" placeholder="表单field" class="form-control" name="filefield-{{id}}"></li>
+                        <li><input type="file" name="file-{{id}}" class="form-control"></li>
+                        {% if helpon %}
+                        <li><a tabindex="0" href="javascript:;" id="helponfile" role="button" data-toggle="popover" data-trigger="focus" title="适用场景及用法" data-content="{{ helponfile }}"><span class="label label-warning">help</span></a></li>
+                        {% endif %}
+                    </ul>
+                    <textarea id="bodyarea-{{id}}" name="requestbody-{{id}}" class="form-control" style="height:100px" placeholder='{{ placeholder_data }}'>{{ test_data }}</textarea>
                 </div>
             </div>
-        </div>
-        <div role="tabpanel" class="tab-pane" id="asserttimepanel-{{id}}">
-            <div class="panel-body" id="assert-time-panel-{{id}}">
-                <div class="lineitem">
-                    connect  timeout: <input type="text" name="connectTimeout-{{id}}" value="5"> 秒
-                </div>
-                <div class="lineitem">
-                    response timeout: <input type="text" name="responseTimeout-{{id}}" value="10"> 秒
-                </div>
-            </div>
-        </div>
-        <div role="tabpanel" class="tab-pane" id="assertheaderpanel-{{id}}">
-            <div class="panel-body" id="assert-header-panel-{{id}}">
-                <div class="lineitem">
-                    equals:<input type="text" name="equalValue-header-{{id}}" style="width:90%">
-                </div>
-                <div class="lineitem">
-                    contains:
-                    <label class="checkbox-inline">
-                      <input type="checkbox" name="useRegx-header-{{id}}" value="1"> 正则匹配
-                    </label>
-                    <input type="text" name="containValue-header-{{id}}" style="width:85%">
-                </div>
-                <div class="lineitem">
-                    length:
-                    <label class="radio-inline">
-                      <input type="radio" name="lengthRadioOptions-header-{{id}}" value="0"> 小于
-                    </label>
-                    <label class="radio-inline">
-                      <input type="radio" name="lengthRadioOptions-header-{{id}}" value="1"> 等于
-                    </label>
-                    <label class="radio-inline">
-                      <input type="radio" name="lengthRadioOptions-header-{{id}}" value="2"> 大于
-                    </label>
-                    <input type="text" name="lengthValue-header-{{id}}" style="width:10%"> 字节
+            <div role="tabpanel" class="tab-pane" id="requestheaderpanel-{{id}}">
+                <div class="panel-body" id="req-header-panel-{{id}}">
+                    <textarea id="headerarea" name="requestheader-{{id}}" class="form-control" placeholder='{{ placeholder_header }}'></textarea>
                 </div>
             </div>
         </div>
     </div>
-    <a href="javascript:;" onclick="addenv({{id}})">添加环境变量</a>
-    <div id="envlist-{{id}}" style="padding:20px">
+    <hr>
+    <h4><span class="label label-danger">响应断言</span></h4>
+    <div style="padding-left:20px">
+        <ul class="nav nav-tabs">
+            <li role="presentation" class="active"><a href="#assertbodypanel-{{id}}" aria-controls="assertbodypanel-{{id}}" role="tab" data-toggle="tab">body</a></li>
+            <li role="presentation"><a href="#asserttimepanel-{{id}}" aria-controls="asserttimepanel-{{id}}" role="tab" data-toggle="tab">time</a></li>
+            <li role="presentation"><a href="#assertheaderpanel-{{id}}" aria-controls="assertheaderpanel-{{id}}" role="tab" data-toggle="tab">header</a></li>
+        </ul>
+        <div class="tab-content">
+            <div role="tabpanel" class="tab-pane active" id="assertbodypanel-{{id}}">
+                <div class="panel-body" id="assert-body-panel-{{id}}">
+                    <div class="lineitem">
+                        equals:<input type="text" name="equalValue-body-{{id}}" style="width:90%">
+                    </div>
+                    <div class="lineitem">
+                        contains:
+                        <label class="checkbox-inline">
+                          <input type="checkbox" name="useRegx-body-{{id}}" value="1"> 正则匹配
+                        </label>
+                        <input type="text" name="containValue-body-{{id}}" style="width:85%">
+                    </div>
+                    <div class="lineitem">
+                        length:
+                        <label class="radio-inline">
+                          <input type="radio" name="lengthRadioOptions-body-{{id}}" value="0"> 小于
+                        </label>
+                        <label class="radio-inline">
+                          <input type="radio" name="lengthRadioOptions-body-{{id}}" value="1"> 等于
+                        </label>
+                        <label class="radio-inline">
+                          <input type="radio" name="lengthRadioOptions-body-{{id}}" value="2"> 大于
+                        </label>
+                        <input type="text" name="lengthValue-body" style="width:10%"> 字节
+                    </div>
+                </div>
+            </div>
+            <div role="tabpanel" class="tab-pane" id="asserttimepanel-{{id}}">
+                <div class="panel-body" id="assert-time-panel-{{id}}">
+                    <div class="lineitem">
+                        connect  timeout: <input type="text" name="connectTimeout-{{id}}" value="5"> 秒
+                    </div>
+                    <div class="lineitem">
+                        response timeout: <input type="text" name="responseTimeout-{{id}}" value="10"> 秒
+                    </div>
+                </div>
+            </div>
+            <div role="tabpanel" class="tab-pane" id="assertheaderpanel-{{id}}">
+                <div class="panel-body" id="assert-header-panel-{{id}}">
+                    <div class="lineitem">
+                        equals:<input type="text" name="equalValue-header-{{id}}" style="width:90%">
+                    </div>
+                    <div class="lineitem">
+                        contains:
+                        <label class="checkbox-inline">
+                          <input type="checkbox" name="useRegx-header-{{id}}" value="1"> 正则匹配
+                        </label>
+                        <input type="text" name="containValue-header-{{id}}" style="width:85%">
+                    </div>
+                    <div class="lineitem">
+                        length:
+                        <label class="radio-inline">
+                          <input type="radio" name="lengthRadioOptions-header-{{id}}" value="0"> 小于
+                        </label>
+                        <label class="radio-inline">
+                          <input type="radio" name="lengthRadioOptions-header-{{id}}" value="1"> 等于
+                        </label>
+                        <label class="radio-inline">
+                          <input type="radio" name="lengthRadioOptions-header-{{id}}" value="2"> 大于
+                        </label>
+                        <input type="text" name="lengthValue-header-{{id}}" style="width:10%"> 字节
+                    </div>
+                </div>
+            </div>
+        </div>
+        <hr>
+        <a href="javascript:;" onclick="addenv({{id}})">添加变量</a>
+        {% if helpon %}
+        <a tabindex="0" href="javascript:;" id="helponenv" role="button" data-toggle="popover" data-trigger="focus" title="适用场景及用法" data-content="{{ helponenv }}"><span class="label label-warning">help</span></a>
+        {% endif %}
+        <div id="envlist-{{id}}" style="padding:20px">
+        </div>
     </div>
 </div>
 """
