@@ -47,9 +47,9 @@
             </div>
             <div class="row clearfix">
                 <div class="col-md-12 column" id="apilistdiv">
-                    <div class="col-md-1">
-                        <div class="list-group" id="apilist">
-                            <a href="javascript:;" id="apilist-1" class="list-group-item active" onclick="showapiconfig(1)">api_1</a>
+                    <div class="col-md-1" style="padding-right:3px">
+                        <div class="list-group" id="apilist" style="text-align:center">
+                            <a href="javascript:;" id="apilist-1" class="list-group-item active" onclick="showapiconfig(1)">接口_1</a>
                         </div>
                         <div style="text-align:center">
                             <a href="javascript:;" onclick="addApi()"><span class="glyphicon glyphicon-plus"></span> 添加</a>
@@ -96,10 +96,9 @@
                 </ul>
 
                 <ul class="list-inline">
-                    <li><a class="btn btn-info" id="startbtn">start mission</a></li>
-                    <li><a class="btn btn-danger" id="stopbtn">stop mission</a></li>
-                    <li><a class="btn btn-warning" id="clearbtn">clear data</a></li>
-                    <li><a class="btn btn-success" id="publishbtn">publish report</a></li>
+                    <li><a class="btn btn-info" id="startbtn">开始压测</a></li>
+                    <li><a class="btn btn-danger" id="stopbtn">停止任务</a></li>
+                    <li><a class="btn btn-warning" id="clearbtn">清除数据</a></li>
                 </ul>
 
             </div>
@@ -461,7 +460,7 @@
         layer.load(2,{offset:"400px"});
         $("#apilist > a").removeClass("active")
         sessionStorage.apicount = parseInt(sessionStorage.apicount) + 1
-        $("#apilist").append('<a href="javascript:;" id="apilist-'+sessionStorage.apicount+'" class="list-group-item active" onclick="showapiconfig('+sessionStorage.apicount+')">api_'+sessionStorage.apicount+'</a>')
+        $("#apilist").append('<a href="javascript:;" id="apilist-'+sessionStorage.apicount+'" class="list-group-item active" onclick="showapiconfig('+sessionStorage.apicount+')">接口_'+sessionStorage.apicount+'</a>')
         $.ajax({
             url:"/getapitemplate/" + sessionStorage.apicount,
             type:"get",
