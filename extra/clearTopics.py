@@ -1,14 +1,16 @@
-import requests
+import requests,os
 from threading import Thread
 
-delurl = "http://104.236.5.165:4171/api/topics/%s"
-r = requests.get("http://104.236.5.165:4171/api/nodes").json()["nodes"][0]["topics"]
+ip = os.environ.get("NSQ_HOST")
+
+delurl = "http://%s:4171/api/topics/%s"
+r = requests.get("http://%s:4171/api/nodes" %ip).json()["nodes"][0]["topics"]
 
 threadlist = []
 
 print(len(r))
 for topic in r:
-	url = delurl %topic["topic"]
+	url = delurl %(ip,topic["topic"])
 	t = Thread(target=requests.delete,args=(url,))
 	threadlist.append(t)
 
