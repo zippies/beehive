@@ -18,7 +18,7 @@ class Config:
 
     client_path = os.path.join(os.path.dirname(__file__),"clienthive")
 
-	localip = "198.199.76.200"
+    localip = "198.199.76.200"
 
     @staticmethod
     def init_app(app):
