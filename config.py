@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os,platform
+import os,platform,socket
 
 class Config:
     DEBUG = True
@@ -15,6 +15,8 @@ class Config:
     redis_db = os.environ.get("REDIS_DB")
 
     nsq_host = os.environ.get("NSQ_HOST")
+    nsq_hostname = os.environ.get("NSQ_HOSTNAME")
+    
 
     client_path = os.path.join(os.path.dirname(__file__),"clienthive")
 

@@ -429,7 +429,7 @@ class QueenBee(Thread):
 
     @property
     def honeyCount(self):
-        url = "http://%s:4171/api/nodes/nsp:4151" %self.config.nsq_host
+        url = "http://%s:4171/api/nodes/%s:4151" %(self.config.nsq_host,self.config.nsq_hostname)
         topics = requests.get(url).json()["topics"]
         message_count = 0
         for topic in topics:
