@@ -55,8 +55,8 @@
 		<thead>
 			<th>missionID</th>
 			<th>missionName</th>
-			<th>URL</th>
-			<th>method</th>
+			<th>urls</th>
+			<th>methods</th>
 			<th>concurrent</th>
 			<th>looptime</th>
 			<th>looptimeType</th>
@@ -64,12 +64,13 @@
 			<th>operation</th>
 		</thead>
 		<tbody id="list-tbody">
+		{% if missions %}
 			{% for mission in missions %}
 				<tr id="list-{{ mission.id }}">
 					<td>{{ mission.id }}</td>
 					<td>{{ mission.name }}</td>
-					<td>{{ mission.url }}</td>
-					<td>{{ mission.type }}</td>
+					<td>{% for url in mission.urls %}{{ url }}<br>{% endfor %}</td>
+					<td>{% for type in mission.types %}{{ type }}<br>{% endfor %}</td>
 					<td>{{ mission.concurrent }}</td>
 					<td>{{ mission.looptime }}</td>
 					<td>{% if mission.looptimetype == 0 %}秒{% elif mission.looptimetype == 1%}分{% else %}时{% endif %}</td>
@@ -77,6 +78,9 @@
 					<td><button data-toggle="modal" data-target=".bs-example-modal-lg" onclick="showReport({{ mission.id }})">查看报告</button></td>
 				</tr>
 			{% endfor %}
+		{% else %}
+			<tr><td colspan="9" style="text-align:center">暂无运行数据</td></tr>
+		{% endif %}
 		</tbody>
 	</table>
 </div>

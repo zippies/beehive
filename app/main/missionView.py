@@ -30,9 +30,11 @@ placeholder_header = """
 
 helponenv = """
 【适用场景】<br>
-&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp当需要测试多个接口,后一个接口要使用前一个接口的返回值时,需要在前一个接口中配置该项,从响应头或者响应body中将正则表达式匹配到的值保存为变量。<br>
-【用法】<br>
-&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp在后一个接口的参数中使用 {{ env(变量名) }} 来获取到全局变量的值。例：{{ env(token) }}
+&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp当需要测试多个接口,后一个接口要使用前一个接口的返回值时,需要在前一个接口中配置该项,从响应头或者响应body中将<span style="color:red">正则表达式第一个括号匹配到的值</span>保存为变量,供后续接口使用。<br>
+【用法-添加变量】<br>
+&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp假设接口body返回内容如下：<br>{"cellphone":"18516042356"}<br>,想要保存手机号,则添加变量,"匹配自"选择"响应体"，正则表达式填写: <span style="color:red">cellphone":"(\d{11})"</span>,变量名填写 <span style="color:red">手机号</span><br>
+【用法-使用变量】<br>
+&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp在后续接口的请求参数中使用 {{ env(变量名) }} 来获取到全局变量的值。如上例中,使用 <span style="color:red">{{ env(手机号) }}</span> 获取之前接口返回的手机号。
 """.strip()
 
 helponfile = """
@@ -63,8 +65,8 @@ def newMission():
             print("choicedmachine",choicedmachines)
             urls,types = [],[]
             for i in range(apicount):
-                urls.append(dictform.get("url-%s" %(i+1)))
-                types.append(dictform.get("type-%s" %(i+1)))
+                urls.append(request.form.get("url-%s" %(i+1)))
+                types.append(request.form.get("type-%s" %(i+1)))
             mission = Mission(
                 request.form.get("missionName"),
                 urls,
@@ -251,8 +253,8 @@ apilist_template = """
         </ul>
         
         <ul class="nav nav-tabs">
-            <li role="presentation" class="active"><a href="#requestbodypanel-{{id}}" aria-controls="requestbodypanel-{{id}}" role="tab" data-toggle="tab">body</a></li>
-            <li role="presentation"><a href="#requestheaderpanel-{{id}}" aria-controls="requestheaderpanel-{{id}}" role="tab" data-toggle="tab">header</a></li>
+            <li role="presentation" class="active"><a href="#requestbodypanel-{{id}}" aria-controls="requestbodypanel-{{id}}" role="tab" data-toggle="tab">请求体(body)</a></li>
+            <li role="presentation"><a href="#requestheaderpanel-{{id}}" aria-controls="requestheaderpanel-{{id}}" role="tab" data-toggle="tab">请求头(header)</a></li>
         </ul>
         <div class="tab-content">
             <!-- body begin -->
@@ -290,25 +292,25 @@ apilist_template = """
     <h4><span class="label label-danger">响应断言</span></h4>
     <div style="padding-left:20px">
         <ul class="nav nav-tabs">
-            <li role="presentation" class="active"><a href="#assertbodypanel-{{id}}" aria-controls="assertbodypanel-{{id}}" role="tab" data-toggle="tab">body</a></li>
-            <li role="presentation"><a href="#asserttimepanel-{{id}}" aria-controls="asserttimepanel-{{id}}" role="tab" data-toggle="tab">time</a></li>
-            <li role="presentation"><a href="#assertheaderpanel-{{id}}" aria-controls="assertheaderpanel-{{id}}" role="tab" data-toggle="tab">header</a></li>
+            <li role="presentation" class="active"><a href="#assertbodypanel-{{id}}" aria-controls="assertbodypanel-{{id}}" role="tab" data-toggle="tab">响应体(body)</a></li>
+            <li role="presentation"><a href="#asserttimepanel-{{id}}" aria-controls="asserttimepanel-{{id}}" role="tab" data-toggle="tab">连接/响应超时</a></li>
+            <li role="presentation"><a href="#assertheaderpanel-{{id}}" aria-controls="assertheaderpanel-{{id}}" role="tab" data-toggle="tab">响应头(header)</a></li>
         </ul>
         <div class="tab-content">
             <div role="tabpanel" class="tab-pane active" id="assertbodypanel-{{id}}">
                 <div class="panel-body" id="assert-body-panel-{{id}}">
                     <div class="lineitem">
-                        equals:<input type="text" name="equalValue-body-{{id}}" style="width:90%">
+                        等于: <input type="text" name="equalValue-body-{{id}}" style="width:90%">
                     </div>
                     <div class="lineitem">
-                        contains:
+                        包含:
                         <label class="checkbox-inline">
                           <input type="checkbox" name="useRegx-body-{{id}}" value="1"> 正则匹配
                         </label>
                         <input type="text" name="containValue-body-{{id}}" style="width:85%">
                     </div>
                     <div class="lineitem">
-                        length:
+                        长度:
                         <label class="radio-inline">
                           <input type="radio" name="lengthRadioOptions-body-{{id}}" value="0"> 小于
                         </label>
@@ -325,27 +327,27 @@ apilist_template = """
             <div role="tabpanel" class="tab-pane" id="asserttimepanel-{{id}}">
                 <div class="panel-body" id="assert-time-panel-{{id}}">
                     <div class="lineitem">
-                        connect  timeout: <input type="text" name="connectTimeout-{{id}}" value="5"> 秒
+                        连接超时: <input type="text" name="connectTimeout-{{id}}" value="5"> 秒
                     </div>
                     <div class="lineitem">
-                        response timeout: <input type="text" name="responseTimeout-{{id}}" value="10"> 秒
+                        响应超时: <input type="text" name="responseTimeout-{{id}}" value="10"> 秒
                     </div>
                 </div>
             </div>
             <div role="tabpanel" class="tab-pane" id="assertheaderpanel-{{id}}">
                 <div class="panel-body" id="assert-header-panel-{{id}}">
                     <div class="lineitem">
-                        equals:<input type="text" name="equalValue-header-{{id}}" style="width:90%">
+                        等于: <input type="text" name="equalValue-header-{{id}}" style="width:90%">
                     </div>
                     <div class="lineitem">
-                        contains:
+                        包含:
                         <label class="checkbox-inline">
                           <input type="checkbox" name="useRegx-header-{{id}}" value="1"> 正则匹配
                         </label>
                         <input type="text" name="containValue-header-{{id}}" style="width:85%">
                     </div>
                     <div class="lineitem">
-                        length:
+                        长度:
                         <label class="radio-inline">
                           <input type="radio" name="lengthRadioOptions-header-{{id}}" value="0"> 小于
                         </label>
@@ -363,7 +365,7 @@ apilist_template = """
         <hr>
         <a href="javascript:;" onclick="addenv({{id}})">添加变量</a>
         {% if helpon %}
-        <a tabindex="0" href="javascript:;" id="helponenv" role="button" data-toggle="popover" data-trigger="focus" title="适用场景及用法" data-content="{{ helponenv }}"><span class="label label-warning">help</span></a>
+        <a tabindex="0" href="javascript:;" id="helponenv" role="button" data-toggle="popover" data-trigger="focus" title="适用场景及用法" data-content='{{ helponenv }}'><span class="label label-warning">help</span></a>
         {% endif %}
         <div id="envlist-{{id}}" style="padding:20px">
         </div>

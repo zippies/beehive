@@ -23,6 +23,7 @@ import (
 )
 
 var rannum int
+var teststring string
 var group_report sync.WaitGroup
 var group_client sync.WaitGroup
 var dataGenerator *ring.Ring
@@ -76,7 +77,6 @@ func dealRandom(value interface{}, envmap map[string]string) []byte {
 
 	for i := 0; i < len_ranint; i++ {
 		matchlist := reg_int.FindStringSubmatch(tmpstr)
-		//nums := strings.Split(strings.Split(strings.Split(matchstr, "randomInt(")[1], ")")[0], ",")
 		min, err := strconv.Atoi(matchlist[1])
 		failOnError(err, "Failed:randomInt only support int params")
 		max, err := strconv.Atoi(matchlist[2])
@@ -168,7 +168,9 @@ func startClient(
 					datastring = string(databytes)
 				}
 				regx := regexp.MustCompile(env.regx)
-				envmap[env.name] = regx.FindString(datastring)
+
+				envmap[env.name] = regx.FindStringSubmatch(datastring)[1]
+				teststring = envmap[env.name]
 			}
 		}
 		group_report.Add(1)
@@ -265,21 +267,21 @@ func main() {
 	config.DialTimeout = 5 * 1e9
 	config.WriteTimeout = 60 * 1e9
 	config.HeartbeatInterval = 10 * 1e9
-	missionid := "32"
+	//missionid := "7"
 	nsqd_addr, redis_addr, missionid := os.Args[1], os.Args[2], os.Args[3]
 	worker, err := nsq.NewProducer(nsqd_addr, config)
 	//worker, err := nsq.NewProducer("104.236.5.165:4150", config)
 	failOnError(err, "Failed to newProducer")
 
 	//connect to redis
-	//redis_conn, err := redis.Dial("tcp", "104.131.29.105:6379")
+	//redis_conn, err := redis.Dial("tcp", "localhost:6379")
 	redis_conn, err := redis.Dial("tcp", redis_addr)
 	failOnError(err, "Failed to connect to redis")
 	defer redis_conn.Close()
 
 	//获取本机ip
-	//ip := getLocalIp()
-	ip := "198.199.76.200"
+	ip := getLocalIp()
+	//ip := "198.199.76.200"
 	id_ip := fmt.Sprintf("%v_%v", missionid, ip)
 
 	//初始化并发量
@@ -509,6 +511,6 @@ func main() {
 
 		}
 	}
-	println("end here")
+	println("end here",teststring)
 
 }
