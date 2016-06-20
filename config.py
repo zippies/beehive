@@ -18,6 +18,7 @@ class Config:
 
     client_path = os.path.join(os.path.dirname(__file__),"clienthive")
 
+	localip = "198.199.76.200"
 
     @staticmethod
     def init_app(app):
@@ -27,16 +28,16 @@ class Config:
     def system(self):
         return platform.system().lower()
     
-    @property
-    def localip(self):
-        ip = None
-        if self.system == "windows":
-            cmd = "ipconfig|findstr IPv4"
-            ip = os.popen(cmd).read().split(":")[1].strip()
-        else:
-            cmd = "ifconfig|grep netmask"
-            ip = os.popen(cmd).read().split("netmask")[0].split("inet")[1].strip()
-        return ip
+    #@property
+    #def localip(self):
+    #    ip = None
+    #    if self.system == "windows":
+    #        cmd = "ipconfig|findstr IPv4"
+    #        ip = os.popen(cmd).read().split(":")[1].strip()
+    #    else:
+    #        cmd = "ifconfig|grep netmask"
+    #        ip = os.popen(cmd).read().split("netmask")[0].split("inet")[1].strip()
+    #    return ip
     
     @property
     def disk(self):
