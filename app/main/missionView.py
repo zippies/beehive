@@ -7,6 +7,7 @@ from threading import Thread
 from jinja2 import Template
 from . import url
 from config import Config
+from collections import Counter
 import json,time,redis,requests
 
 
@@ -128,7 +129,7 @@ def freshStatus(id):
 def getErrorChart(id):
     progress = statusController.get(id)
     datas = [
-        ("connectionTimeout",progress.get("e_c",0)),
+        ("connectTimeout",progress.get("e_c",0)),
         ("responseTimeout",progress.get("e_r",0)),
         ("unknownError",progress.get("e_u",0)),
         ("assertionError",progress.get("e_a",0))
@@ -138,7 +139,7 @@ def getErrorChart(id):
 
     option = eval(Template(option_template).render(
         title = "错误分布",
-        typestr = "['connectionTimeout','responseTimeout','unknownError','assertionError']",
+        typestr = "['connectTimeout','responseTimeout','unknownError','assertionError']",
         datalist = datalist
     ))
 
@@ -165,6 +166,34 @@ def getElapseChart(id):
     ))
 
     return jsonify(option)
+
+
+error_template = """
+<ul class="list-group">
+    {% for error in errors %}
+        <li class="list-group-item">
+            <span class="badge">{{ error[1] }}</span>
+            {{ error[0] }}
+        </li>
+    {% endfor %}
+</ul>
+"""
+
+
+@url.route("/showerror/<int:id>/<sampletype>")
+def showErrorSample(id,sampletype):
+    print(id,sampletype)
+    redis_errors = redis_conn.lrange("%s_%s" %(id,sampletype),0,-1)
+    errors = []
+    c = Counter(redis_errors)
+    for key in c.keys():
+        errors.append((key.decode(),c[key]))
+
+    error_detail = Template(error_template).render(
+        errors=errors
+    )
+
+    return error_detail
 
 
 @url.route("/stopmission/<int:id>",methods=["POST"])

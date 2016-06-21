@@ -147,9 +147,15 @@
                 </tbody>
             </table>
         </div>
-
+        <div id="errorsamplediv" style="width:100%;height:auto;margin-bottom:10px">
+            <a href="javascript:;" onclick="showerrordetail('connectTimeout')" id="connerror" style="display:none">连接超时 <span class="badge" id="connectTimeout">42</span></a> 
+            <a href="javascript:;" onclick="showerrordetail('respTimeout')" id="resperror" style="display:none">响应超时 <span class="badge" id="respTimeout">42</span></a> 
+            <a href="javascript:;" onclick="showerrordetail('assertionError')" id="asserterror" style="display:none">断言错误 <span class="badge" id="assertionError">42</span></a> 
+            <a href="javascript:;" onclick="showerrordetail('unknownError')" id="unknownerror" style="display:none">服务器错误 <span class="badge" id="unknownError">42</span></a> 
+        </div>
         <div style="height:600px" class="col-lg-12">
-            <div class="col-lg-6" id="errordiv" style="height:100%"></div>
+            <div class="col-lg-6" id="errordiv" style="height:100%">
+            </div>
             <div class="col-lg-6" id="elapsediv" style="height:100%"></div>
         </div>
 
