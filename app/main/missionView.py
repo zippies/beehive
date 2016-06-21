@@ -8,7 +8,7 @@ from jinja2 import Template
 from . import url
 from config import Config
 from collections import Counter
-import json,time,redis,requests
+import json,time,redis,requests,re
 
 
 config = Config()
@@ -219,7 +219,7 @@ def testApi(apiid):
         header = form.get("requestheader-%s" %apiid,'{}') or '{}'
         conn_timeout = int(form.get("connectionTimeout-%s" %apiid,5))
         resp_timeout = int(form.get("responseTimeout-%s" %apiid,10))
-
+        apicount = len(dict(form).get("apiitems"))
         r = None
         try:
             if method.lower() == "post":
@@ -235,6 +235,23 @@ def testApi(apiid):
                 info["errorMsg"] = "unsupported method"
         except Exception as e:
             r = "接口无返回"
+
+        envs = []
+
+        if not isinstance(r,str):
+            for i in range(apicount):
+                envcount = len(dict(form).get("env-%s" %(i+1),[]))
+                for j in range(envcount):
+                    envsource = form.get("envsource-%s-%s" %(i+1,j+1))
+                    envname = form.get("envname-%s-%s" %(i+1,j+1))
+                    envregx = form.get("envregx-%s-%s" %(i+1,j+1))
+                    print(envsource,envname,envregx)
+                    reg = re.compile(envregx)
+                    if envsource == "header":
+                        envs.append((envname,reg.search(str(r.headers)).groups()[0]))
+                    elif envsource == "body":
+                        envs.append((envname,reg.search(r.text).groups()[0]))
+
         info["message"] = Template(result_template).render(
             url=url,
             method=method,
@@ -242,7 +259,8 @@ def testApi(apiid):
             req_header=header,
             resp_code=r.status_code if not isinstance(r,str) else 2000,
             resp_body=r.text if not isinstance(r,str) else r,
-            resp_header=r.headers if not isinstance(r,str) else r
+            resp_header=r.headers if not isinstance(r,str) else r,
+            envs=envs
         )
 
         return jsonify(info)
@@ -415,6 +433,13 @@ result_template = """
     <textarea class="form-control" style="height:100px">{{ resp_header }}</textarea>
     <label>responseBody:</label> <br/>
     <textarea class="form-control" style="height:200px">{{ resp_body }}</textarea>
+    <hr>
+    <label>保存变量值</label>
+    <ul>
+    {% for env in envs %}
+        <li>{{ env[0] }} = "{{ env[1] }}"</li>
+    {% endfor %}
+    </ul>
 </div>
 """
 
