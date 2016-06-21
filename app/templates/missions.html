@@ -118,10 +118,6 @@
                 $("#throught").html(resp.toh)
                 $("#errors").html(resp.es)
                 $("#error-percent").html(resp.e_p)
-                $("#error_conn").html(resp.e_c)
-                $("#error_resp").html(resp.e_r)
-                $("#error_unknown").html(resp.e_u)
-                $("#error_assert").html(resp.e_a)
 			}
 		})
 
@@ -134,6 +130,9 @@
 			},
 			success:function(data){
 				errorChart.setOption(data);
+                errorChart.on('click', function (params) {
+                    showerrordetail(id,params.name);
+                });
 			}
 		})
 
@@ -149,6 +148,25 @@
 			}
 		})
 
+	}
+
+	function showerrordetail(id,errortype){
+	    $.ajax({
+	        url:"/showerror/"+id+"/"+errortype,
+	        type:"get",
+	        error:function(request){
+	            layer.msg(request.status,{offset:"200px"})
+	        },
+	        success:function(data){
+	            layer.open({
+	                type: 1,
+	                title: errortype,
+	                offset: "200px",
+	                area: [document.body.clientWidth * 0.8 +'px', '300px'], //宽高
+	                content: data
+	            });
+	        }
+	    })
 	}
 </script>
 {% endblock %}
