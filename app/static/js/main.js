@@ -10,65 +10,71 @@ $(function(){
     $("#clearbtn").click(clearResult)
 
     $("#startbtn").click(function(){
+        if($("#startbtn").attr("disabled") != "disabled"){
+            if(!validateForm()){
+                return
+            }
+            $("#startbtn").attr("disabled","disabled")
 
-        if(!validateForm()){
-            return
-        }
-        
-        if(!localStorage.runningjob){
+            if(!localStorage.runningjob){
 
-            clearResult();
+                clearResult();
 
-            var formdata = new FormData($("#newmissionform")[0])
-            $.ajax({
-                url:"/newmission",
-                type:"POST",
-                data:formdata,
-                dataType:"JSON",
-                cache:false,
-                processData:false,
-                contentType:false,
-                error:function(request){
-                    layer.msg(request.status,{offset:"200px"})
-                    localStorage.clear();
-                },
-                success:function(data){
-                    if(data.result){
-                        localStorage.runningjob = data.missionid;
-                        freshStatus()
-                        console.log("fresh end")
-                    }else{
-                        layer.msg("运行失败:"+data.errorMsg,{offset:"200px"})
+                var formdata = new FormData($("#newmissionform")[0])
+                $.ajax({
+                    url:"/newmission",
+                    type:"POST",
+                    data:formdata,
+                    dataType:"JSON",
+                    cache:false,
+                    processData:false,
+                    contentType:false,
+                    error:function(request){
+                        layer.msg(request.status,{offset:"200px"})
+                        localStorage.clear();
+                    },
+                    success:function(data){
+                        if(data.result){
+                            localStorage.runningjob = data.missionid;
+                            freshStatus()
+                            console.log("fresh end")
+                        }else{
+                            $("#startbtn").removeAttr("disabled")
+                            layer.msg("运行失败:"+data.errorMsg,{offset:"200px"})
+                        }
                     }
-                }
-            })
-        }else{
-            $("html,body").animate({scrollTop:$("#runtimeConfig").offset().top},1000)
+                })
+            }else{
+                $("html,body").animate({scrollTop:$("#runtimeConfig").offset().top},1000)
+            }
         }
     })
 
 
     $("#stopbtn").click(function(){
-        $.ajax({
-            url:"/stopmission/"+localStorage.runningjob,
-            type:"post",
-            error:function(request){
-                layer.msg(request.status,{offset:"200px"})
-                console.log(request.status)
-            },
-            success:function(data){
-                if(data.result){
-                    layer.msg("停止成功",{offset:"200px"})
-                    console.log("停止成功")
-                }else{
-                    layer.msg("停止失败:"+data.errorMsg,{offset:"200px"})
-                    console.log("停止失败:"+data.errorMsg)
-                }
-            }
-        })
+        if($("#stopbtn").attr("disabled") != "disabled"){
+            $.ajax({
+                    url:"/stopmission/"+localStorage.runningjob,
+                    type:"post",
+                    error:function(request){
+                        layer.msg(request.status,{offset:"200px"})
+                        console.log(request.status)
+                    },
+                    success:function(data){
+                        if(data.result){
+                            $("#startbtn").removeAttr("disabled")
+                            $("#stopbtn").attr("disabled","disabled")
+                            layer.msg("停止成功",{offset:"200px"})
+                            console.log("停止成功")
+                        }else{
+                            layer.msg("停止失败:"+data.errorMsg,{offset:"200px"})
+                            console.log("停止失败:"+data.errorMsg)
+                        }
+                    }
+                })
+        }
     })
 })
-
 
 
 function addenv(apiid){
@@ -120,9 +126,9 @@ function freshStatus(){
                 },
                 success:function(data){
                     resp = JSON.parse(data)
-                    console.log(resp,resp.s)
                     if(resp.s == -1){
                         window.clearInterval(interval)
+                        $("#startbtn").removeAttr("disabled")
                         $("#progressbar").removeClass("progress-bar-warning").addClass("progress-bar-danger");
                         $("#initialdetail").hide();
                         $("#runningstate").removeClass("btn-success").removeClass("btn-warning").addClass("btn-danger").html("启动失败");
@@ -133,12 +139,15 @@ function freshStatus(){
                         if(resp.s  == 1){
                             if($("#progressdiv").is(":hidden")){
                                 layer.msg("开始压测",{offset:"100px"}) 
+                                $("#stopbtn").removeAttr("disabled")
                             }
                             $("#progressdiv").show()
                             $("#progressbar").removeClass("progress-bar-warning").addClass("progress-bar-danger").attr("aria-valuemax",resp.l).attr("data-transitiongoal",resp.p);
                             $("#runningstate").removeClass("btn-warning").removeClass("btn-success").addClass("btn-danger").html("正在压测");
                         }else{
                             console.log("finished here")
+                            $("#startbtn").removeAttr("disabled")
+                            $("#stopbtn").attr("disabled","disabled")
                             $("#progressbar").removeClass("progress-bar-warning").removeClass("progress-bar-danger").addClass("progress-bar-success").attr("aria-valuemax",resp.l).attr("data-transitiongoal",resp.p);
                             $("#runningstate").removeClass("btn-danger").removeClass("btn-warning").addClass("btn-success").html("压测完成");
 
