@@ -36,6 +36,7 @@ $(function(){
                     success:function(data){
                         if(data.result){
                             localStorage.runningjob = data.missionid;
+                            sessionStorage.prejob = data.missionid
                             freshStatus()
                             console.log("fresh end")
                         }else{
@@ -136,6 +137,7 @@ function freshStatus(){
                         return
                     }
                     if(resp.s != 0){
+                        showerror(resp)
                         if(resp.s  == 1){
                             if($("#progressdiv").is(":hidden")){
                                 layer.msg("开始压测",{offset:"100px"}) 
@@ -162,6 +164,9 @@ function freshStatus(){
                                 },
                                 success:function(data){
                                     errorChart.setOption(data);
+                                    errorChart.on('click', function (params) {
+                                        showerrordetail(params.name);
+                                    });
                                 }
                             })
 
@@ -190,10 +195,6 @@ function freshStatus(){
                         $("#throught").html(resp.toh)
                         $("#errors").html(resp.es)
                         $("#error-percent").html(resp.e_p)
-                        $("#error_conn").html(resp.e_c)
-                        $("#error_resp").html(resp.e_r)
-                        $("#error_unknown").html(resp.e_u)
-                        $("#error_assert").html(resp.e_a)
                     }else{
                         $("#progressbar").attr("data-transitiongoal",resp.p);
                         $('.progress .progress-bar').progressbar({display_text: 'center', use_percentage: false, amount_format: function(p, t) {return p + ' / ' + t;}});
@@ -208,6 +209,43 @@ function freshStatus(){
     }
 }
 
+function showerrordetail(errortype){
+    $.ajax({
+        url:"/showerror/"+sessionStorage.prejob+"/"+errortype,
+        type:"get",
+        error:function(request){
+            layer.msg(request.status,{offset:"200px"})
+        },
+        success:function(data){
+            layer.open({
+                type: 1,
+                title: errortype,
+                offset: "200px",
+                area: [document.body.clientWidth * 0.8 +'px', '300px'], //宽高
+                content: data
+            });
+        }
+    })
+}
+
+function showerror(resp){
+    if(resp.e_c && !sessionStorage.e_c){
+        $("#connerror").show()
+        $("#connectTimeout").html(resp.e_c)
+    }
+    if(resp.e_r && !sessionStorage.e_r){
+        $("#resperror").show()
+        $("#respTimeout").html(resp.e_r)
+    }
+    if(resp.e_a && !sessionStorage.e_a){
+        $("#asserterror").show()
+        $("#assertionError").html(resp.e_a)
+    }
+    if(resp.e_u && !sessionStorage.e_u){
+        $("#unknownerror").show()
+        $("#unknownError").html(resp.e_u)
+    }
+}
 
 function testapi(apiid){
     if(!$.trim($("#url-"+apiid).val())){

@@ -23,7 +23,6 @@ import (
 )
 
 var rannum int
-var teststring string
 var group_report sync.WaitGroup
 var group_client sync.WaitGroup
 var dataGenerator *ring.Ring
@@ -170,7 +169,6 @@ func startClient(
 				regx := regexp.MustCompile(env.regx)
 
 				envmap[env.name] = regx.FindStringSubmatch(datastring)[1]
-				teststring = envmap[env.name]
 			}
 		}
 		group_report.Add(1)
@@ -207,7 +205,7 @@ func sendResult(missionid string,
 		if request.err != nil {
 			report.Method = request.method
 			report.Url = request.url
-			report.Elapsed = request.elapsed
+			report.Elapsed,_ = strconv.ParseFloat(fmt.Sprintf("%.0f",request.elapsed),64)
 			report.Machine_ip = ip
 			report.ErrorMsg = request.err.Error()
 			report.StatusCode = -1
@@ -511,6 +509,6 @@ func main() {
 
 		}
 	}
-	println("end here",teststring)
+	println("end here")
 
 }
