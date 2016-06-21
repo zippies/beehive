@@ -247,10 +247,18 @@ def testApi(apiid):
                     envregx = form.get("envregx-%s-%s" %(i+1,j+1))
                     print(envsource,envname,envregx)
                     reg = re.compile(envregx)
+                    env = None
                     if envsource == "header":
-                        envs.append((envname,reg.search(str(r.headers)).groups()[0]))
+                        try:
+                            env = reg.search(str(r.headers)).groups()[0]
+                        except Exception as e:
+                            env = str(e)
                     elif envsource == "body":
-                        envs.append((envname,reg.search(r.text).groups()[0]))
+                        try:
+                            env = reg.search(r.text).groups()[0]
+                        except Exception as e:
+                            env = str(e)
+                    envs.append(envname,env)
 
         info["message"] = Template(result_template).render(
             url=url,
