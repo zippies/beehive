@@ -258,7 +258,7 @@ def testApi(apiid):
                             env = reg.search(r.text).groups()[0]
                         except Exception as e:
                             env = str(e)
-                    envs.append(envname,env)
+                    envs.append((envname,env))
 
         info["message"] = Template(result_template).render(
             url=url,
