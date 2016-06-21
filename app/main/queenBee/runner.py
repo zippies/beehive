@@ -121,7 +121,7 @@ class QueenBee(Thread):
         if not beecount and int(concurrent/2) > 500:
             beecount = 500
         else:
-            beecount = int(concurrent/2) or 1
+            beecount = concurrent
 
         ############################################初始化redis######################################################
         self.statusController.set(self.id, {"p": 2, "i": "初始化redis参数","s":0})
@@ -423,7 +423,7 @@ class QueenBee(Thread):
                 etype = "unknownError"
 
             #Error分类，存错误信息
-            self.redisclient.lpush("%s.%s"%(self.id,etype),m)
+            self.redisclient.lpush("%s_%s"%(self.id,etype),m)
 
         bee.start()
 

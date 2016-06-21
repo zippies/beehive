@@ -172,7 +172,7 @@ def stopMission(id):
     try:
         mission = Mission.query.filter_by(id=id).first()
         if mission:
-            redis_conn.set("status-%s" %id,-1)
+            redis_conn.set("%s_status" %id,-1)
     except Exception as e:
         info["result"] = False
         info["errorMsg"] = str(e)
