@@ -66,6 +66,18 @@ func randomPhone() string {
 	return fmt.Sprintf("%v%v", phoneHead[ranindex], randomInt(10000000, 19999999))
 }
 
+func dealUrl(url string,envmap map[string]string) string{
+	reg_env := regexp.MustCompile(`{{ *env\((.+)\) *}}`)
+	len_env := len(reg_env.FindAllString(url, -1))
+	for i := 0; i < len_env; i++ {
+		matchlist := reg_env.FindStringSubmatch(url)
+		name := matchlist[1]
+		url = strings.Replace(url, matchlist[0], fmt.Sprintf("%v", envmap[name]), 1)
+	}
+
+	return url
+}
+
 func dealRandom(value interface{}, envmap map[string]string) []byte {
 	tmpstr := fmt.Sprint(value)
 	reg_phone := regexp.MustCompile(`{{ *randomPhone\(\) *}}`)
@@ -119,6 +131,7 @@ func startClient(
 
 			dataGenerator = request.dataGenerator.Next()
 			data := dealRandom(dataGenerator.Value, envmap)
+			request.url = dealUrl(request.url, envmap)
 
 			if request.filetype != 1 {
 				var tmp map[string]string
@@ -160,6 +173,8 @@ func startClient(
 			start_time := time.Now()
 			resp, err := request.client.Do(req)
 			end_time := time.Now()
+			
+			requests[index].url = request.url
 			requests[index].resp = resp
 			requests[index].err = err
 			requests[index].elapsed = end_time.Sub(start_time).Seconds()

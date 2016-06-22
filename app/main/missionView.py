@@ -301,7 +301,7 @@ apilist_template = """
                 </select>
             </li>
             <li style="width:60%">
-                <input id="url-{{id}}" name="url-{{id}}" class="form-control" maxlength="120" type="text" placeholder="接口地址" value="{{ test_url }}">
+                <input id="url-{{id}}" name="url-{{id}}" class="form-control" maxlength="200" type="text" placeholder="接口地址" value="{{ test_url }}">
             </li>
             <li><a class="btn btn-default" href="javascript:;" onclick="testapi({{id}})">测试一下</a></li>
             <li><a href="javascript:;" class="btn btn-danger" onclick="delapi({{id}})">删除</a></li>
@@ -375,7 +375,7 @@ apilist_template = """
                         <label class="radio-inline">
                           <input type="radio" name="lengthRadioOptions-body-{{id}}" value="2"> 大于
                         </label>
-                        <input type="text" name="lengthValue-body" style="width:10%"> 字节
+                        <input type="text" name="lengthValue-body-{{id}}" style="width:10%"> 字节
                     </div>
                 </div>
             </div>
