@@ -66,16 +66,16 @@ func randomPhone() string {
 	return fmt.Sprintf("%v%v", phoneHead[ranindex], randomInt(10000000, 19999999))
 }
 
-func dealUrl(url string,envmap map[string]string) string{
+func dealEnv(desc string,envmap map[string]string) string{
 	reg_env := regexp.MustCompile(`{{ *env\((.+)\) *}}`)
-	len_env := len(reg_env.FindAllString(url, -1))
+	len_env := len(reg_env.FindAllString(desc, -1))
 	for i := 0; i < len_env; i++ {
-		matchlist := reg_env.FindStringSubmatch(url)
+		matchlist := reg_env.FindStringSubmatch(desc)
 		name := matchlist[1]
-		url = strings.Replace(url, matchlist[0], fmt.Sprintf("%v", envmap[name]), 1)
+		desc = strings.Replace(desc, matchlist[0], fmt.Sprintf("%v", envmap[name]), 1)
 	}
 
-	return url
+	return desc
 }
 
 func dealRandom(value interface{}, envmap map[string]string) []byte {
@@ -131,7 +131,7 @@ func startClient(
 
 			dataGenerator = request.dataGenerator.Next()
 			data := dealRandom(dataGenerator.Value, envmap)
-			request.url = dealUrl(request.url, envmap)
+			request.url = dealEnv(request.url, envmap)
 
 			if request.filetype != 1 {
 				var tmp map[string]string
@@ -148,7 +148,7 @@ func startClient(
 				req, e = http.NewRequest(request.method, request.url, bytes.NewReader(data))
 				failOnError(e, "Failed to newRequest,filetype != 1")
 				for key, value := range request.header {
-					req.Header.Set(key, value)
+					req.Header.Set(key, dealEnv(value, envmap))
 				}
 			} else {
 				var dataobj map[string]string
@@ -167,7 +167,7 @@ func startClient(
 				failOnError(e, "Failed to newRequest,filetype == 1")
 				req.Header.Set("Content-Type", content_type)
 				for key, value := range request.header {
-					req.Header.Set(key, value)
+					req.Header.Set(key, dealEnv(value, envmap))
 				}
 			}
 			start_time := time.Now()
@@ -202,6 +202,7 @@ func startClient(
 			//}
 		}
 		group_report.Add(1)
+		//group_report.Done()
 		go sendResult(missionid, ip, worker, requests)
 	}
 	group_client.Done()
@@ -294,7 +295,7 @@ func main() {
 	config.DialTimeout = 5 * 1e9
 	config.WriteTimeout = 60 * 1e9
 	config.HeartbeatInterval = 10 * 1e9
-	//missionid := "3"
+	//missionid := "2"
 	nsqd_addr, redis_addr, missionid := os.Args[1], os.Args[2], os.Args[3]
 	worker, err := nsq.NewProducer(nsqd_addr, config)
 	//worker, err := nsq.NewProducer("104.236.5.165:4150", config)
