@@ -121,6 +121,17 @@ func startClient(
 			data := dealRandom(dataGenerator.Value, envmap)
 
 			if request.filetype != 1 {
+				var tmp map[string]string
+				var slice []string
+				if request.method == "GET"{
+					err := json.Unmarshal(data,&tmp)
+					failOnError(err, "Failed to Unmarshal data")
+					for key,value := range tmp{
+						slice = append(slice,fmt.Sprintf("%v=%v",key,value))
+					}
+					request.url = request.url+"?"+strings.Join(slice,"&")
+					data = []byte("")
+				}
 				req, e = http.NewRequest(request.method, request.url, bytes.NewReader(data))
 				failOnError(e, "Failed to newRequest,filetype != 1")
 				for key, value := range request.header {
@@ -153,6 +164,7 @@ func startClient(
 			requests[index].err = err
 			requests[index].elapsed = end_time.Sub(start_time).Seconds()
 			if err != nil {
+				fmt.Println("error occured")
 				break
 			}
 			for _, env := range request.envs {
@@ -167,9 +179,12 @@ func startClient(
 					datastring = string(databytes)
 				}
 				regx := regexp.MustCompile(env.regx)
-
 				envmap[env.name] = regx.FindStringSubmatch(datastring)[1]
 			}
+			//if index != 0{
+			//	tmp,_ := ioutil.ReadAll(resp.Body)
+			//	fmt.Println(index,request.method,request.url,resp.StatusCode,string(data),string(tmp))
+			//}
 		}
 		group_report.Add(1)
 		go sendResult(missionid, ip, worker, requests)
@@ -228,7 +243,6 @@ func sendResult(missionid string,
 			defer request.resp.Body.Close()
 		}
 		reports = append(reports, report)
-		//fmt.Println(index, request.url, report.StatusCode, report.Body, 111)
 	}
 	body, err := json.Marshal(&reports)
 	failOnError(err, "Failed to Marshall reports")
@@ -265,7 +279,7 @@ func main() {
 	config.DialTimeout = 5 * 1e9
 	config.WriteTimeout = 60 * 1e9
 	config.HeartbeatInterval = 10 * 1e9
-	//missionid := "7"
+	//missionid := "3"
 	nsqd_addr, redis_addr, missionid := os.Args[1], os.Args[2], os.Args[3]
 	worker, err := nsq.NewProducer(nsqd_addr, config)
 	//worker, err := nsq.NewProducer("104.236.5.165:4150", config)
@@ -295,9 +309,6 @@ func main() {
 
 	redis_looptime, err := redis_conn.Do("get", fmt.Sprintf("%v_looptime", missionid))
 	failOnError(err, "Failed to query Redis")
-
-	//redis_status, err := redis_conn.Do("get", fmt.Sprintf("%v_status", missionid))
-	//failOnError(err, "Failed to query Redis")
 
 	if redis_delay == nil {
 		start_delay = float64(0)
