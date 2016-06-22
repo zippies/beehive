@@ -127,7 +127,7 @@ class QueenBee(Thread):
         self.statusController.set(self.id, {"p": 2, "i": "初始化redis参数","s":0})
 
         self.redisclient = redis.Redis(host=self.config.redis_host,port=self.config.redis_port,db=self.config.redis_db)
-        conc_avg,conc_left = 1,0#int(concurrent / len(self.machines)),concurrent%len(self.machines)
+        conc_avg,conc_left = int(concurrent / len(self.machines)),concurrent%len(self.machines)
         for index,machine in enumerate(self.machines):
             key = "%s_%s" %(self.id,machine.ip)
             self.redisclient.hset(key,"ready",0)

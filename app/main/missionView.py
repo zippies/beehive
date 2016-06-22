@@ -227,7 +227,7 @@ def testApi(apiid):
             elif method.lower() == "get":
                 r = requests.get(url=url,params=eval(body),headers=eval(header),timeout=(conn_timeout,resp_timeout))
             elif method.lower() == "delete":
-                r = requests.delete(url=url)
+                r = requests.delete(url=url,data=eval(body),headers=eval(header),timeout=(conn_timeout,resp_timeout))
             elif method.lower() == "put":
                 r = requests.put(url=url,data=eval(body),headers=eval(header),timeout=(conn_timeout,resp_timeout))
             else:
