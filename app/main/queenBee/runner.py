@@ -429,8 +429,10 @@ class QueenBee(Thread):
 
     @property
     def honeyCount(self):
-        url = "http://%s:4171/api/nodes/%s:4151" %(self.config.nsq_host,self.config.nsq_hostname)
-        topics = requests.get(url).json()["topics"]
+        #url = "http://%s:4171/api/nodes/%s:4151" %(self.config.nsq_host,self.config.nsq_hostname)
+        url = "http://%s:4151/stats?format=json" %self.config.nsq_hostname
+        #topics = requests.get(url).json()["topics"]
+        topics = requests.get(url).json()['data']['topics']
         message_count = 0
         for topic in topics:
             if topic["topic_name"] in ["%s_success" %self.id,"%s_failed" %self.id]:
